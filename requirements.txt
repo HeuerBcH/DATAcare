@@ -32,14 +32,15 @@ seaborn==0.13.0
 plotly==5.18.0
 
 # ============================================
-# MODEL INTERPRETABILITY
+# MODEL INTERPRETABILITY (opcional no Windows — requer MSVC Build Tools)
+# pip install shap>=0.46
 # ============================================
-shap==0.43.0
+# shap==0.43.0
 
 # ============================================
 # HYPERPARAMETER TUNING
 # ============================================
-optuna==3.14.0
+optuna==3.6.2
 
 # ============================================
 # UTILITIES
