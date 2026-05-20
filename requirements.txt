@@ -1,11 +1,22 @@
 # ============================================
-# Data Care - ML Development Requirements
+# DATAcare - Full Stack Requirements
+# Backend (Django) + ML + Frontend (React)
 # 
-# Para desenvolvimento e treinamento de modelos
-# pip install -r requirements-dev-ml.txt
-# 
-# Use em ambiente separado ou venv diferente
+# pip install -r requirements.txt
 # ============================================
+
+# ============================================
+# CORE DJANGO BACKEND
+# ============================================
+Django==4.2.8
+djangorestframework==3.14.0
+django-cors-headers==4.3.1
+django-filter==23.5
+psycopg2-binary==2.9.9
+python-decouple==3.8
+gunicorn==21.2.0
+whitenoise==6.6.0
+dj-database-url==2.1.0
 
 # ============================================
 # CORE ML
@@ -32,10 +43,24 @@ seaborn==0.13.0
 plotly==5.18.0
 
 # ============================================
-# MODEL INTERPRETABILITY (opcional no Windows — requer MSVC Build Tools)
-# pip install shap>=0.46
+# API DOCUMENTATION
 # ============================================
-# shap==0.43.0
+drf-yasg==1.21.7
+coreapi==2.3.3
+
+# ============================================
+# DATABASE & ORM
+# ============================================
+sqlparse==0.4.4
+asgiref==3.7.1
+
+# ============================================
+# UTILITIES
+# ============================================
+python-dotenv==1.0.0
+tqdm==4.66.1
+Pillow==10.1.0
+python-json-logger==2.0.7
 
 # ============================================
 # HYPERPARAMETER TUNING
@@ -43,7 +68,24 @@ plotly==5.18.0
 optuna==3.6.2
 
 # ============================================
-# UTILITIES
+# TESTING
 # ============================================
-python-dotenv==1.0.0
-tqdm==4.66.1
+pytest==7.4.3
+pytest-django==4.7.0
+pytest-cov==4.1.0
+factory-boy==3.3.0
+faker==21.0.0
+
+# ============================================
+# CODE QUALITY
+# ============================================
+black==23.12.0
+isort==5.13.2
+flake8==6.1.0
+pylint==3.0.3
+
+# ============================================
+# MODEL INTERPRETABILITY (opcional no Windows — requer MSVC Build Tools)
+# pip install shap>=0.46
+# ============================================
+# shap==0.43.0
