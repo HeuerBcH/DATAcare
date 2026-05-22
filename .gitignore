@@ -62,6 +62,14 @@ ml/data/*.csv
 !ml/data/example.csv
 
 # ============================================
+# Data pipeline outputs (gerados a partir dos brutos)
+# ============================================
+data_pipeline/data/interim/*
+data_pipeline/data/processed/**/*.parquet
+data_pipeline/data/reports/**/*.json
+!data_pipeline/data/**/.gitkeep
+
+# ============================================
 # Logs
 # ============================================
 logs/
