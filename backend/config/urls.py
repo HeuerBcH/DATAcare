@@ -5,14 +5,18 @@ from django.contrib import admin
 from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import path, include
+from apps.users.urls import auth_api_urlpatterns
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    
-    # API endpoints
+
+    # Auth JWT endpoints
+    path('api/v1/auth/', include((auth_api_urlpatterns, 'auth'))),
+
+    # REST API endpoints
     path('api/v1/', include('apps.api.urls', namespace='api')),
-    
-    # App specific URLs
+
+    # MVT template views
     path('users/', include('apps.users.urls', namespace='users')),
     path('patients/', include('apps.patients.urls', namespace='patients')),
     path('predictions/', include('apps.predictions.urls', namespace='predictions')),

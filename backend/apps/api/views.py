@@ -81,7 +81,7 @@ class PatientViewSet(viewsets.ViewSet):
     
     def list(self, request):
         """List patients (healthcare professionals only)."""
-        if request.user.role not in ['healthcare', 'admin']:
+        if request.user.role not in ['profissional_saude', 'admin']:
             return Response({'detail': 'Sem permissão'}, status=status.HTTP_403_FORBIDDEN)
         
         patients = Patient.objects.all()
@@ -92,7 +92,7 @@ class PatientViewSet(viewsets.ViewSet):
         """Get patient details."""
         patient = get_object_or_404(Patient, pk=pk)
         
-        if request.user != patient.user and request.user.role not in ['healthcare', 'admin']:
+        if request.user != patient.user and request.user.role not in ['profissional_saude', 'admin']:
             return Response({'detail': 'Sem permissão'}, status=status.HTTP_403_FORBIDDEN)
         
         serializer = PatientDetailSerializer(patient)
@@ -138,7 +138,7 @@ class PatientVitalsViewSet(viewsets.ViewSet):
         """List vitals for a patient."""
         patient = get_object_or_404(Patient, pk=patient_pk)
         
-        if request.user != patient.user and request.user.role not in ['healthcare', 'admin']:
+        if request.user != patient.user and request.user.role not in ['profissional_saude', 'admin']:
             return Response({'detail': 'Sem permissão'}, status=status.HTTP_403_FORBIDDEN)
         
         vitals = patient.vitals.all()
@@ -150,7 +150,7 @@ class PatientVitalsViewSet(viewsets.ViewSet):
         patient = get_object_or_404(Patient, pk=patient_pk)
         vitals = get_object_or_404(PatientVitals, pk=pk, patient=patient)
         
-        if request.user != patient.user and request.user.role not in ['healthcare', 'admin']:
+        if request.user != patient.user and request.user.role not in ['profissional_saude', 'admin']:
             return Response({'detail': 'Sem permissão'}, status=status.HTTP_403_FORBIDDEN)
         
         serializer = PatientVitalsSerializer(vitals)
@@ -199,7 +199,7 @@ class PredictionViewSet(viewsets.ViewSet):
         """Get prediction details."""
         prediction = get_object_or_404(Prediction, pk=pk)
         
-        if request.user != prediction.patient.user and request.user.role not in ['healthcare', 'admin']:
+        if request.user != prediction.patient.user and request.user.role not in ['profissional_saude', 'admin']:
             return Response({'detail': 'Sem permissão'}, status=status.HTTP_403_FORBIDDEN)
         
         serializer = PredictionDetailSerializer(prediction)

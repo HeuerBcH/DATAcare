@@ -1,41 +1,109 @@
 # DATAcare REST API Documentation
 
+> **Atualizado em:** branch `feature/hu03-hu04` — autenticação migrada para JWT
+
 ## Base URL
 
 ```
 http://localhost:8000/api/v1/
 ```
 
-## Authentication
+## Authentication — JWT (Bearer Token)
 
-Dois métodos suportados:
-
-### 1. Token Authentication
-
-Incluir header:
+Todas as rotas protegidas exigem o header:
 ```
-Authorization: Token seu_token_aqui
+Authorization: Bearer <access_token>
 ```
 
-Obter token:
-```bash
-curl -X POST http://localhost:8000/api/v1/auth-token/ \
-  -H "Content-Type: application/json" \
-  -d '{"username": "seu_usuario", "password": "sua_senha"}'
+O `access_token` é obtido em `/api/v1/auth/login/` ou `/api/v1/auth/register/`.
+Duração: **8 horas**. Use `/api/v1/auth/refresh/` para renovar sem novo login.
+
+## Perfis de usuário (roles)
+
+| Role | Descrição | Acesso principal |
+|---|---|---|
+| `gestor` | Gestor/Coordenador de UBS | Dashboard, alertas, indicadores, configuração |
+| `acs` | Agente Comunitário de Saúde | Formulários de visita, dados de pacientes atribuídos |
+| `profissional_saude` | Médico, enfermeiro, etc. | Prontuários, triagem, sinais vitais |
+| `admin` | Administrador do sistema | Acesso irrestrito |
+
+## Endpoints de Autenticação
+
+### POST /api/v1/auth/register/
+
+Cria usuário e retorna tokens imediatamente.
+
+Request:
+```json
+{
+  "username": "gestor_ubs01",
+  "email": "gestor@ubs.recife.pe.gov.br",
+  "password": "DataCare@2024",
+  "password_confirm": "DataCare@2024",
+  "first_name": "Ana",
+  "last_name": "Souza",
+  "role": "gestor",
+  "phone": "81999990000"
+}
 ```
 
-### 2. Session Authentication
+Response (201):
+```json
+{
+  "access": "eyJ0eXAiOiJKV1QiLCJhb...",
+  "refresh": "eyJ0eXAiOiJKV1QiLCJhb...",
+  "user": {
+    "id": 1,
+    "username": "gestor_ubs01",
+    "email": "gestor@ubs.recife.pe.gov.br",
+    "role": "gestor",
+    "role_display": "Gestor/Coordenador de UBS"
+  }
+}
+```
 
-Usa cookies (CSRF protected) para SPAs.
+### POST /api/v1/auth/login/
+
+Request:
+```json
+{
+  "username": "gestor_ubs01",
+  "password": "DataCare@2024"
+}
+```
+
+Response (200): mesmo formato do register.
+
+### POST /api/v1/auth/refresh/
+
+```json
+{ "refresh": "<refresh_token>" }
+```
+
+Response (200): `{ "access": "<novo_access_token>" }`
+
+### POST /api/v1/auth/logout/
+
+```
+Authorization: Bearer <access_token>
+```
+```json
+{ "refresh": "<refresh_token>" }
+```
+
+Invalida o refresh token (blacklist). Response (200): `{ "detail": "Logout realizado com sucesso." }`
+
+### GET /api/v1/auth/me/
+
+```
+Authorization: Bearer <access_token>
+```
+
+Retorna dados do usuário autenticado.
 
 ## Endpoints
 
-### 👤 Users
-
-#### Register
-```
-POST /users/
-```
+### Users — POST /api/v1/users/ (criar via API, sem token)
 
 Request:
 ```json
@@ -46,7 +114,7 @@ Request:
   "password_confirm": "senha123",
   "first_name": "João",
   "last_name": "Silva",
-  "role": "patient"
+  "role": "profissional_saude"
 }
 ```
 
@@ -460,26 +528,24 @@ Response:
 
 ## Examples with JavaScript/Fetch
 
-### Register
+### Login e salvar tokens
 ```javascript
-const response = await fetch('http://localhost:8000/api/v1/users/', {
+const res = await fetch('http://localhost:8000/api/v1/auth/login/', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    username: 'usuario1',
-    email: 'user@example.com',
-    password: 'senha123',
-    password_confirm: 'senha123'
-  })
+  body: JSON.stringify({ username: 'gestor_ubs01', password: 'DataCare@2024' })
 });
+const { access, refresh, user } = await res.json();
+localStorage.setItem('access_token', access);
+localStorage.setItem('refresh_token', refresh);
 ```
 
-### API Call with Token
+### Chamada autenticada com JWT
 ```javascript
-const token = localStorage.getItem('auth_token');
-const response = await fetch('http://localhost:8000/api/v1/patients/me/', {
+const token = localStorage.getItem('access_token');
+const response = await fetch('http://localhost:8000/api/v1/auth/me/', {
   headers: {
-    'Authorization': `Token ${token}`,
+    'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json'
   }
 });

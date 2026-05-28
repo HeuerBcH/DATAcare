@@ -7,15 +7,16 @@ class User(AbstractUser):
     Custom User model extending Django's AbstractUser.
     """
     ROLE_CHOICES = [
-        ('patient', 'Paciente'),
-        ('healthcare', 'Profissional de Saúde'),
+        ('gestor', 'Gestor/Coordenador de UBS'),
+        ('acs', 'Agente Comunitário de Saúde'),
+        ('profissional_saude', 'Profissional de Saúde'),
         ('admin', 'Administrador'),
     ]
-    
+
     role = models.CharField(
         max_length=20,
         choices=ROLE_CHOICES,
-        default='patient',
+        default='profissional_saude',
         verbose_name='Papel'
     )
     phone = models.CharField(
