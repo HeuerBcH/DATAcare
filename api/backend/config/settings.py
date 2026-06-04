@@ -2,12 +2,13 @@
 Django settings for DATAcare project.
 """
 
-import os
 from pathlib import Path
 from decouple import config
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+# Raiz do projeto Django (pasta que contém manage.py, apps/, templates/, static/, media/)
+BASE_DIR = Path(__file__).resolve().parent.parent
+# Raiz do repositório DATAcare (api/, data_pipeline/, logs/, etc.)
+PROJECT_ROOT = BASE_DIR.parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-dev-key-change-in-production')
@@ -62,7 +63,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'backend' / 'templates'],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -105,12 +106,12 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'backend' / 'staticfiles'
-STATICFILES_DIRS = [BASE_DIR / 'backend' / 'static']
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [BASE_DIR / 'static']
 
-# Media files
+# Media files (uploads — ex.: profile_image em users.User)
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'backend' / 'media'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -178,7 +179,7 @@ LOGGING = {
         'file': {
             'level': 'INFO',
             'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'django.log',
+            'filename': PROJECT_ROOT / 'logs' / 'django.log',
             'formatter': 'verbose'
         },
     },
@@ -188,13 +189,11 @@ LOGGING = {
     },
 }
 
-# Create logs directory if it doesn't exist
-LOGS_DIR = BASE_DIR / 'logs'
+LOGS_DIR = PROJECT_ROOT / 'logs'
 LOGS_DIR.mkdir(exist_ok=True)
 
 # User Model
 AUTH_USER_MODEL = 'users.User'
 
-# Machine Learning Models Path
-ML_MODELS_PATH = BASE_DIR / 'data_pipeline' / 'models'
+ML_MODELS_PATH = PROJECT_ROOT / 'data_pipeline' / 'models'
 ML_MODELS_PATH.mkdir(exist_ok=True)

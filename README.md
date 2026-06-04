@@ -6,12 +6,13 @@ Repositório da solução **Data Care** (CESAR School — Projeto 6, Grupo 13): 
 
 | Área | Status |
 |------|--------|
-| Frontend (React + Vite + Tailwind) | Scaffold na raiz — `npm run dev` |
+| Frontend (`api/frontend/`) | React + Vite + Tailwind |
+| Backend (`api/backend/`) | Django + DRF + JWT |
 | Data pipeline (`data_pipeline/`) | Estrutura de pastas pronta |
-| Backend (FastAPI) | Ainda não implementado |
-| Docker | Arquivos vazios (HU-11) |
+| Docker | `docker-compose.yaml` configurado |
 
-Documentação detalhada: [`documentacoes/SETUP.md`](documentacoes/SETUP.md), histórias: [`documentacoes/IMPLEMENTACOES.md`](documentacoes/IMPLEMENTACOES.md).
+Estrutura da API: [`api/README.md`](api/README.md).  
+Documentação: [`documentacoes/SETUP.md`](documentacoes/SETUP.md), histórias: [`documentacoes/IMPLEMENTACOES.md`](documentacoes/IMPLEMENTACOES.md).
 
 ## Pré-requisitos
 
@@ -27,19 +28,15 @@ Documentação detalhada: [`documentacoes/SETUP.md`](documentacoes/SETUP.md), hi
 ## Setup rápido (Windows)
 
 ```powershell
-cd c:\Users\rmiranda\Git\Cesar\DATAcare
-.\scripts\setup.ps1
-```
-
-Ou manualmente:
-
-```powershell
+cd api\frontend
 npm install
+cd ..\..
+
 Copy-Item .env.example .env
 
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r api\backend\requirements.txt
 ```
 
 ### Ambiente virtual Python
@@ -51,10 +48,20 @@ pip install -r requirements.txt
 ### Frontend
 
 ```powershell
+cd api\frontend
 npm run dev
 ```
 
 Abre em **http://localhost:3000**.
+
+### Backend
+
+```powershell
+cd api\backend
+python manage.py runserver
+```
+
+API em **http://localhost:8000/api/v1/**.
 
 Outros scripts: `npm run build`, `npm test`, `npm run lint`, `npm run type-check`.
 
@@ -91,17 +98,16 @@ Arquivo `.env` (criado a partir de `.env.example`):
 VITE_API_URL=http://localhost:8000
 ```
 
-Quando o backend existir, aponte essa URL para a API FastAPI.
+`VITE_API_URL` deve apontar para o backend Django (`http://localhost:8000`).
 
 ## Estrutura
 
 ```
 DATAcare/
-├── src/                 # Frontend React
+├── api/
+│   ├── backend/         # Django + DRF (templates, static, media)
+│   └── frontend/        # React + Vite
 ├── data_pipeline/       # ETL, ML, notebooks
 ├── documentacoes/
-├── scripts/setup.ps1
-├── package.json
-├── requirements.txt     # ML / notebooks (dev)
 └── requirements-ml.txt  # ML estendido (opcional)
 ```

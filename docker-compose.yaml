@@ -25,10 +25,10 @@ services:
   backend:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: api/backend/Dockerfile
     container_name: datacare-backend
     command: >
-      sh -c "cd backend &&
+      sh -c "cd api/backend &&
              python manage.py migrate &&
              python manage.py createsuperuser --noinput --username admin --email admin@datacare.local || true &&
              gunicorn --bind 0.0.0.0:8000 --workers 4 --timeout 120 config.wsgi:application"
@@ -45,8 +45,8 @@ services:
       CORS_ALLOWED_ORIGINS: http://frontend:3000,http://localhost:3000,http://127.0.0.1:3000
     volumes:
       - .:/app
-      - static_volume:/app/backend/staticfiles
-      - media_volume:/app/backend/media
+      - static_volume:/app/api/backend/staticfiles
+      - media_volume:/app/api/backend/media
     ports:
       - "8000:8000"
     depends_on:
@@ -63,13 +63,13 @@ services:
   # React Frontend (Development)
   frontend:
     build:
-      context: .
-      dockerfile: Dockerfile.frontend
+      context: api/frontend
+      dockerfile: Dockerfile
     container_name: datacare-frontend
     environment:
       VITE_API_URL: http://backend:8000
     volumes:
-      - ./src:/app/src
+      - ./api/frontend:/app
     ports:
       - "3000:3000"
       - "5173:5173"

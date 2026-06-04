@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
-COPY requirements.txt .
+COPY api/backend/requirements.txt requirements.txt
 
 # Install Python dependencies
 RUN pip install --user --no-cache-dir -r requirements.txt
@@ -43,7 +43,7 @@ COPY . .
 RUN mkdir -p logs static staticfiles media
 
 # Collect static files
-RUN python backend/manage.py collectstatic --noinput 2>/dev/null || true
+RUN python api/backend/manage.py collectstatic --noinput 2>/dev/null || true
 
 # Expose port
 EXPOSE 8000
