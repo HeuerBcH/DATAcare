@@ -13,13 +13,8 @@ urlpatterns = [
     # Auth JWT endpoints
     path('api/v1/auth/', include((auth_api_urlpatterns, 'auth'))),
 
-    # REST API endpoints
+    # REST API (consumida pelo frontend React)
     path('api/v1/', include('apps.api.urls', namespace='api')),
-
-    # MVT template views
-    path('users/', include('apps.users.urls', namespace='users')),
-    path('patients/', include('apps.patients.urls', namespace='patients')),
-    path('predictions/', include('apps.predictions.urls', namespace='predictions')),
 ]
 
 # Serve media files in development

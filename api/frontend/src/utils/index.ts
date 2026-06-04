@@ -7,10 +7,14 @@ export function cn(...inputs: ClassValue[]) {
 
 /** Formata uma data ISO para pt-BR. */
 export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('pt-BR', {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleDateString('pt-BR', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   });
 }
 

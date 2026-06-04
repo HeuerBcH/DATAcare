@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404
 from apps.users.models import User
 from apps.patients.models import Patient, PatientVitals
 from apps.predictions.models import PredictionModel, Prediction, PredictionFeedback
+from apps.predictions.services import calculate_risk_score, get_risk_level
 
 from .serializers import (
     UserSerializer, UserDetailSerializer, UserCreateSerializer,
@@ -176,6 +177,7 @@ class PredictionModelViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
     queryset = PredictionModel.objects.filter(is_active=True)
     serializer_class = PredictionModelSerializer
+    pagination_class = None
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'description']
     ordering_fields = ['created_at', 'accuracy']
@@ -221,30 +223,21 @@ class PredictionViewSet(viewsets.ViewSet):
         if not latest_vitals:
             return Response({'detail': 'Nenhum sinal vital registrado'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # TODO: Call actual ML model for prediction
-        risk_score = 50  # Placeholder
-        
+        risk_score = calculate_risk_score(latest_vitals)
+
         prediction = Prediction.objects.create(
             patient=patient,
             model=model,
-            risk_level=get_risk_level_from_score(risk_score),
+            risk_level=get_risk_level(risk_score),
             probability=risk_score,
             prediction_data={
                 'blood_pressure': f"{latest_vitals.blood_pressure_systolic}/{latest_vitals.blood_pressure_diastolic}",
                 'heart_rate': latest_vitals.heart_rate,
-            }
+                'temperature': latest_vitals.temperature,
+                'bmi': latest_vitals.bmi,
+            },
+            clinical_notes='Predição gerada automaticamente com base nos últimos sinais vitais.',
         )
-        
+
         serializer = PredictionDetailSerializer(prediction)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-
-def get_risk_level_from_score(score):
-    """Get risk level from score."""
-    if score >= 80:
-        return 'critical'
-    elif score >= 60:
-        return 'high'
-    elif score >= 40:
-        return 'medium'
-    return 'low'

@@ -1,17 +1,37 @@
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { AuthProvider } from '@/contexts/AuthContext';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { AppLayout } from '@/components/layout/AppLayout';
+import { HomePage } from '@/pages/HomePage';
+import { LoginPage } from '@/pages/LoginPage';
+import { RegisterPage } from '@/pages/RegisterPage';
+import { ProfilePage } from '@/pages/ProfilePage';
+import { PatientsPage } from '@/pages/PatientsPage';
+import { PredictionsPage } from '@/pages/PredictionsPage';
+
 function App() {
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="mx-auto flex max-w-3xl flex-col gap-4 px-6 py-16">
-        <p className="text-sm font-medium uppercase tracking-wide text-teal-700">
-          Data Care
-        </p>
-        <h1 className="text-3xl font-semibold">Ambiente pronto para desenvolvimento</h1>
-        <p className="text-slate-600">
-          Frontend React + Vite configurado. Próximo passo: implementar as histórias em{' '}
-          <code className="rounded bg-slate-200 px-1">documentacoes/IMPLEMENTACOES.md</code>.
-        </p>
-      </div>
-    </main>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route
+            element={
+              <ProtectedRoute>
+                <AppLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<HomePage />} />
+            <Route path="profile" element={<ProfilePage />} />
+            <Route path="patients" element={<PatientsPage />} />
+            <Route path="predictions" element={<PredictionsPage />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 

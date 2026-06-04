@@ -1,6 +1,6 @@
 # DATAcare Django Backend
 
-> Backend com Django MVT para DATAcare — Saúde Digital + ML para APS
+> Backend Django + DRF para DATAcare. Interface web em `api/frontend/` (React).
 
 ## Estrutura
 
@@ -17,8 +17,7 @@ backend/
 │   ├── patients/          # Dados de pacientes
 │   ├── predictions/       # Resultados de ML
 │   └── api/               # Endpoints REST
-├── templates/             # Templates HTML (MVT)
-├── static/                # CSS, JS estático
+├── static/                # CSS/JS (admin Django)
 ├── staticfiles/           # Arquivos estáticos coletados
 ├── media/                 # Upload de mídia
 └── logs/                  # Logs da aplicação

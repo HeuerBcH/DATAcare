@@ -1,13 +1,21 @@
-// ── Auth ──────────────────────────────────────────────────────────────────────
+export type UserRole = 'gestor' | 'acs' | 'profissional_saude' | 'admin';
+
+export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
 
 export interface LoginCredentials {
   username: string;
   password: string;
 }
 
-export interface AuthTokens {
-  access: string;
-  refresh: string;
+export interface RegisterPayload {
+  username: string;
+  email: string;
+  password: string;
+  password_confirm: string;
+  first_name: string;
+  last_name: string;
+  role: UserRole;
+  phone?: string;
 }
 
 export interface User {
@@ -16,39 +24,43 @@ export interface User {
   email: string;
   first_name: string;
   last_name: string;
-  role: 'admin' | 'doctor' | 'nurse' | 'patient';
-  is_active: boolean;
-  date_joined: string;
+  role: UserRole;
+  role_display?: string;
+  phone?: string;
+  cpf?: string;
+  bio?: string;
+  created_at?: string;
 }
 
-// ── Patients ──────────────────────────────────────────────────────────────────
+export interface AuthResponse {
+  access: string;
+  refresh: string;
+  user: User;
+}
 
 export interface Patient {
   id: number;
-  user: number;
-  cpf: string;
-  birth_date: string;
-  gender: 'M' | 'F' | 'O';
-  phone: string;
-  address: string;
+  user: User;
+  cpf?: string;
+  date_of_birth?: string;
+  age?: number;
+  gender?: string;
+  latest_vitals?: VitalSigns | null;
   created_at: string;
-  updated_at: string;
 }
 
 export interface VitalSigns {
   id: number;
-  patient: number;
   blood_pressure_systolic: number;
   blood_pressure_diastolic: number;
   heart_rate: number;
   temperature: number;
   weight: number;
   height: number;
-  blood_glucose: number;
-  recorded_at: string;
+  blood_glucose?: number;
+  bmi?: number;
+  measured_at: string;
 }
-
-// ── Predictions ───────────────────────────────────────────────────────────────
 
 export interface PredictionModel {
   id: number;
@@ -61,21 +73,15 @@ export interface PredictionModel {
 export interface Prediction {
   id: number;
   patient: number;
+  patient_name?: string;
   model: number;
-  risk_score: number;
-  risk_level: 'low' | 'medium' | 'high' | 'critical';
-  input_data: Record<string, unknown>;
-  result: Record<string, unknown>;
+  model_name?: string;
+  risk_level: RiskLevel;
+  risk_level_display?: string;
+  probability: number;
+  prediction_data: Record<string, unknown>;
+  clinical_notes?: string;
   created_at: string;
-}
-
-// ── API helpers ───────────────────────────────────────────────────────────────
-
-export interface PaginatedResponse<T> {
-  count: number;
-  next: string | null;
-  previous: string | null;
-  results: T[];
 }
 
 export interface ApiError {
