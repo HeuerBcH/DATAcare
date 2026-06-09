@@ -1,5 +1,8 @@
 from django.db import models
-from apps.users.models import User
+from django.conf import settings
+
+
+User = settings.AUTH_USER_MODEL
 
 
 class Patient(models.Model):
@@ -148,3 +151,68 @@ class PatientVitals(models.Model):
         """Calculate BMI."""
         height_m = self.height / 100
         return round(self.weight / (height_m ** 2), 2)
+
+
+class Visit(models.Model):
+    """
+    ACS field visit / triagem record.
+    Stores symptom data, demographics, and ML prediction results.
+    Lightweight — does not require a User account per patient.
+    """
+    DISEASE_CHOICES = [
+        ('dengue', 'Dengue'),
+        ('chikungunya', 'Chikungunya'),
+        ('zika', 'Zika'),
+        ('influenza', 'Influenza'),
+        ('unknown', 'Desconhecida'),
+    ]
+    SEVERITY_CHOICES = [
+        ('baixo', 'Baixo Risco'),
+        ('medio', 'Médio Risco'),
+        ('alto', 'Alto Risco'),
+    ]
+    SEX_CHOICES = [('M', 'Masculino'), ('F', 'Feminino')]
+
+    # Patient info (not linked to User — quick triagem)
+    patient_name = models.CharField(max_length=200, verbose_name='Nome do Paciente')
+    patient_age = models.PositiveSmallIntegerField(verbose_name='Idade')
+    patient_sex = models.CharField(max_length=1, choices=SEX_CHOICES, default='F', verbose_name='Sexo')
+    bairro = models.CharField(max_length=100, blank=True, default='', verbose_name='Bairro')
+
+    # Symptom / comorbidity snapshot (SINAN-compatible keys, 0/1)
+    symptoms = models.JSONField(default=dict, verbose_name='Sintomas')
+    comorbidities = models.JSONField(default=dict, verbose_name='Comorbidades')
+
+    # ML prediction results
+    predicted_disease = models.CharField(
+        max_length=20, choices=DISEASE_CHOICES, blank=True, default='unknown',
+        verbose_name='Doença Predita'
+    )
+    predicted_severity = models.CharField(
+        max_length=10, choices=SEVERITY_CHOICES, blank=True, default='baixo',
+        verbose_name='Gravidade Predita'
+    )
+    disease_probabilities = models.JSONField(default=dict, verbose_name='Prob. Doença')
+    severity_probabilities = models.JSONField(default=dict, verbose_name='Prob. Gravidade')
+    model_available = models.BooleanField(default=False, verbose_name='Modelo Disponível')
+
+    # ACS who registered
+    acs = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='visits', verbose_name='ACS Responsável'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Criado em')
+
+    class Meta:
+        verbose_name = 'Visita / Triagem'
+        verbose_name_plural = 'Visitas / Triagens'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['-created_at']),
+            models.Index(fields=['predicted_severity', '-created_at']),
+            models.Index(fields=['predicted_disease']),
+        ]
+
+    def __str__(self):
+        return f"{self.patient_name} — {self.predicted_disease} ({self.predicted_severity})"

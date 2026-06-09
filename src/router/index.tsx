@@ -5,6 +5,7 @@ import Login from '../pages/Login'
 import Dashboard from '../pages/Dashboard'
 import Triagem from '../pages/Triagem'
 import Predictions from '../pages/Predictions'
+import Patients from '../pages/Patients'
 
 export const router = createBrowserRouter([
   {
@@ -33,6 +34,14 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute allowedRoles={['acs', 'profissional_saude', 'admin']}>
             <Triagem />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'pacientes',
+        element: (
+          <ProtectedRoute allowedRoles={['gestor', 'profissional_saude', 'admin']}>
+            <Patients />
           </ProtectedRoute>
         ),
       },

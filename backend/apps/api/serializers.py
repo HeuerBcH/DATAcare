@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from apps.users.models import User
-from apps.patients.models import Patient, PatientVitals
+from apps.patients.models import Patient, PatientVitals, Visit
 from apps.predictions.models import PredictionModel, Prediction, PredictionFeedback
 
 
@@ -126,8 +126,54 @@ class PredictionDetailSerializer(PredictionSerializer):
 
 class PredictionFeedbackSerializer(serializers.ModelSerializer):
     feedback_display = serializers.CharField(source='get_feedback_display', read_only=True)
-    
+
     class Meta:
         model = PredictionFeedback
         fields = ['id', 'prediction', 'feedback', 'feedback_display', 'healthcare_professional', 'notes', 'created_at']
         read_only_fields = ['id', 'prediction', 'created_at']
+
+
+# ============= Visit / Triagem Serializers =============
+
+class VisitSerializer(serializers.ModelSerializer):
+    acs_name = serializers.SerializerMethodField()
+    predicted_disease_display = serializers.CharField(
+        source='get_predicted_disease_display', read_only=True
+    )
+    predicted_severity_display = serializers.CharField(
+        source='get_predicted_severity_display', read_only=True
+    )
+
+    class Meta:
+        model = Visit
+        fields = [
+            'id', 'patient_name', 'patient_age', 'patient_sex', 'bairro',
+            'symptoms', 'comorbidities',
+            'predicted_disease', 'predicted_disease_display',
+            'predicted_severity', 'predicted_severity_display',
+            'disease_probabilities', 'severity_probabilities',
+            'model_available', 'acs_name', 'created_at',
+        ]
+        read_only_fields = ['id', 'predicted_disease', 'predicted_severity',
+                            'disease_probabilities', 'severity_probabilities',
+                            'model_available', 'created_at']
+
+    def get_acs_name(self, obj):
+        if obj.acs:
+            return obj.acs.get_full_name() or obj.acs.username
+        return None
+
+
+class VisitCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Visit
+        fields = ['patient_name', 'patient_age', 'patient_sex', 'bairro', 'symptoms', 'comorbidities']
+
+
+# ============= Predict Input Serializer =============
+
+class PredictInputSerializer(serializers.Serializer):
+    features = serializers.DictField(
+        child=serializers.FloatField(),
+        help_text="Feature dict: symptom/comorbidity keys → 0 or 1"
+    )
