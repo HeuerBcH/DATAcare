@@ -45,6 +45,12 @@ env.bak/
 *.key
 
 # ============================================
+# Postman / API clients (podem conter credenciais)
+# ============================================
+*.postman_collection.json
+*.postman_environment.json
+
+# ============================================
 # Database
 # ============================================
 *.db

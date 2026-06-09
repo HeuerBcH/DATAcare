@@ -51,7 +51,7 @@
             "header": [{"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"gestor_ubs01\",\n  \"email\": \"gestor@ubs.recife.pe.gov.br\",\n  \"password\": \"DataCare@2024\",\n  \"password_confirm\": \"DataCare@2024\",\n  \"first_name\": \"Ana\",\n  \"last_name\": \"Souza\",\n  \"role\": \"gestor\",\n  \"phone\": \"81999990000\"\n}"
+              "raw": "{\n  \"username\": \"{{dev_username}}\",\n  \"email\": \"{{dev_email}}\",\n  \"password\": \"{{dev_password}}\",\n  \"password_confirm\": \"{{dev_password}}\",\n  \"first_name\": \"Ana\",\n  \"last_name\": \"Souza\",\n  \"role\": \"gestor\",\n  \"phone\": \"81999990000\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/v1/auth/register/",
@@ -85,7 +85,7 @@
             "header": [{"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"gestor_ubs01\",\n  \"password\": \"DataCare@2024\"\n}"
+              "raw": "{\n  \"username\": \"{{dev_username}}\",\n  \"password\": \"{{dev_password}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/v1/auth/login/",
