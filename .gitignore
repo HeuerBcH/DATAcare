@@ -1,0 +1,141 @@
+# ============================================
+# Python
+# ============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+pip-log.txt
+.pytest_cache/
+.coverage
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv
+venv.bak/
+env.bak/
+
+# ============================================
+# IDE & Editor
+# ============================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-workspace
+*.sublime-project
+.fleet
+
+# ============================================
+# Environment Variables
+# ============================================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ============================================
+# Database
+# ============================================
+*.db
+*.sqlite
+*.sqlite3
+data.db
+postgres_data/
+
+# ============================================
+# Machine Learning Models
+# ============================================
+ml/models/*.joblib
+ml/models/*.pkl
+ml/data/*.csv
+!ml/data/example.csv
+
+# ============================================
+# Data pipeline outputs (gerados a partir dos brutos)
+# ============================================
+data_pipeline/data/interim/*
+data_pipeline/data/processed/**/*.parquet
+data_pipeline/data/reports/**/*.json
+!data_pipeline/data/**/.gitkeep
+
+# ============================================
+# Logs
+# ============================================
+logs/
+*.log
+
+# ============================================
+# Jupyter & Notebooks
+# ============================================
+.ipynb_checkpoints/
+*.ipynb
+
+# ============================================
+# Node.js / Frontend
+# ============================================
+node_modules/
+dist/
+build/
+.next/
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+package-lock.json
+yarn.lock
+
+# ============================================
+# Vite
+# ============================================
+.vite/
+
+# ============================================
+# Testing
+# ============================================
+coverage/
+htmlcov/
+.nyc_output/
+
+# ============================================
+# OS
+# ============================================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# ============================================
+# Temp Files
+# ============================================
+*.tmp
+*.bak
+*.swp
+*~
+.#*
+
+# ============================================
+# Docker
+# ============================================
+.dockerignore
+
+# ============================================
+# CI/CD
+# ============================================
+.github/workflows/secrets.yml
+
+# ============================================
+# Development Tools
+# ============================================
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
