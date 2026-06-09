@@ -1,0 +1,329 @@
+{
+  "info": {
+    "name": "DATAcare API",
+    "description": "Coleção completa da API DATAcare — autenticação JWT, usuários, pacientes e predições.\n\n## Como usar\n1. Importe este arquivo no Postman\n2. Configure a variável `base_url` (padrão: http://localhost:8000)\n3. Execute **Auth / Register** ou **Auth / Login** — o token é salvo automaticamente\n4. Todos os outros requests usam o token salvo",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const json = pm.response.json();",
+                  "    pm.collectionVariables.set('access_token', json.access);",
+                  "    pm.collectionVariables.set('refresh_token', json.refresh);",
+                  "    pm.test('Registro bem-sucedido', () => pm.response.to.have.status(201));",
+                  "    pm.test('Retorna access token', () => pm.expect(json.access).to.be.a('string'));",
+                  "    pm.test('Retorna refresh token', () => pm.expect(json.refresh).to.be.a('string'));",
+                  "    pm.test('Retorna dados do usuário', () => pm.expect(json.user.role).to.be.oneOf(['gestor','acs','profissional_saude','admin']));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{dev_username}}\",\n  \"email\": \"{{dev_email}}\",\n  \"password\": \"{{dev_password}}\",\n  \"password_confirm\": \"{{dev_password}}\",\n  \"first_name\": \"Ana\",\n  \"last_name\": \"Souza\",\n  \"role\": \"gestor\",\n  \"phone\": \"81999990000\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/register/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "register", ""]
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    pm.collectionVariables.set('access_token', json.access);",
+                  "    pm.collectionVariables.set('refresh_token', json.refresh);",
+                  "    pm.test('Login bem-sucedido', () => pm.response.to.have.status(200));",
+                  "    pm.test('Retorna access token', () => pm.expect(json.access).to.be.a('string'));",
+                  "    pm.test('Role é válido', () => pm.expect(json.user.role).to.be.oneOf(['gestor','acs','profissional_saude','admin']));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{dev_username}}\",\n  \"password\": \"{{dev_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "login", ""]
+            }
+          }
+        },
+        {
+          "name": "Login — credenciais inválidas (deve dar 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Rejeita credenciais inválidas', () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"gestor_ubs01\",\n  \"password\": \"senha_errada\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "login", ""]
+            }
+          }
+        },
+        {
+          "name": "Meu perfil (GET /me/)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Retorna perfil autenticado', () => pm.response.to.have.status(200));",
+                  "pm.test('Tem campo role', () => pm.expect(pm.response.json()).to.have.property('role'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/me/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "me", ""]
+            }
+          }
+        },
+        {
+          "name": "Sem token — deve dar 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Rejeita request sem token', () => pm.response.to.have.status(401));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/me/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "me", ""]
+            }
+          }
+        },
+        {
+          "name": "Refresh token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const json = pm.response.json();",
+                  "    pm.collectionVariables.set('access_token', json.access);",
+                  "    pm.test('Novo access token retornado', () => pm.expect(json.access).to.be.a('string'));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/refresh/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "refresh", ""]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Logout OK', () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{access_token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/logout/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "logout", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Usuários (API)",
+      "item": [
+        {
+          "name": "Listar usuários (admin only)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "users", ""]
+            }
+          }
+        },
+        {
+          "name": "Detalhe de usuário",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "users", "1", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pacientes (API)",
+      "item": [
+        {
+          "name": "Listar pacientes",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/patients/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "patients", ""]
+            }
+          }
+        },
+        {
+          "name": "Criar paciente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{access_token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date_of_birth\": \"1985-03-20\",\n  \"gender\": \"F\",\n  \"blood_type\": \"A+\",\n  \"address\": \"Rua das Flores, 123\",\n  \"city\": \"Recife\",\n  \"state\": \"PE\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/patients/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "patients", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Predições (API)",
+      "item": [
+        {
+          "name": "Listar modelos ativos",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/prediction-models/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "prediction-models", ""]
+            }
+          }
+        },
+        {
+          "name": "Minhas predições",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/predictions/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "predictions", ""]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

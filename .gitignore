@@ -45,6 +45,12 @@ env.bak/
 *.key
 
 # ============================================
+# Postman / API clients (podem conter credenciais)
+# ============================================
+*.postman_collection.json
+*.postman_environment.json
+
+# ============================================
 # Database
 # ============================================
 *.db
@@ -52,6 +58,18 @@ env.bak/
 *.sqlite3
 data.db
 postgres_data/
+
+# ============================================
+# Django
+# ============================================
+db.sqlite3
+db.sqlite3-journal
+/media
+/staticfiles
+/static
+manage.py
+local_settings.py
+/logs
 
 # ============================================
 # Machine Learning Models

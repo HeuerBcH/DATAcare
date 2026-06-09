@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block title %}Pacientes - DATAcare{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">Lista de Pacientes</h4>
+            </div>
+            <div class="card-body">
+                {% if patients %}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>CPF</th>
+                                    <th>Gênero</th>
+                                    <th>Data Nascimento</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for patient in patients %}
+                                    <tr>
+                                        <td>{{ patient.user.get_full_name }}</td>
+                                        <td>{{ patient.cpf }}</td>
+                                        <td>{{ patient.get_gender_display }}</td>
+                                        <td>{{ patient.date_of_birth|date:"d/m/Y" }}</td>
+                                        <td>
+                                            <a href="{% url 'patients:patient_detail' patient.id %}" class="btn btn-sm btn-info">Ver</a>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">Nenhum paciente registrado.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
