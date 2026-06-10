@@ -30,7 +30,7 @@ services:
     command: >
       sh -c "cd backend &&
              python manage.py migrate &&
-             python manage.py createsuperuser --noinput --username admin --email admin@datacare.local || true &&
+             python manage.py seed_demo --patients 150 || true &&
              gunicorn --bind 0.0.0.0:8000 --workers 4 --timeout 120 config.wsgi:application"
     environment:
       DEBUG: ${DEBUG:-False}
@@ -67,7 +67,7 @@ services:
       dockerfile: Dockerfile.frontend
     container_name: datacare-frontend
     environment:
-      VITE_API_URL: http://backend:8000
+      VITE_API_URL: http://localhost:8000
     volumes:
       - ./src:/app/src
     ports:

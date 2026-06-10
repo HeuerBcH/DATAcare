@@ -37,12 +37,14 @@ INSTALLED_APPS = [
     # Third-party apps
     'corsheaders',
     'rest_framework',
+    'rest_framework_simplejwt.token_blacklist',
     'django_filters',
     
     # Local apps
     'apps.users.apps.UsersConfig',
     'apps.patients.apps.PatientsConfig',
     'apps.predictions.apps.PredictionsConfig',
+    'apps.triage.apps.TriageConfig',
     'apps.api.apps.ApiConfig',
 ]
 
@@ -78,16 +80,28 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DB_NAME', default='datacare_db'),
-        'USER': config('DB_USER', default='datacare_user'),
-        'PASSWORD': config('DB_PASSWORD', default='datacare_password'),
-        'HOST': config('DB_HOST', default='localhost'),
-        'PORT': config('DB_PORT', default='5432'),
+# Por padrão usa SQLite no local (zero infra para a demo). O Docker injeta
+# DB_ENGINE=django.db.backends.postgresql via docker-compose para usar Postgres.
+DB_ENGINE = config('DB_ENGINE', default='django.db.backends.sqlite3')
+
+if 'sqlite' in DB_ENGINE:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': DB_ENGINE,
+            'NAME': config('DB_NAME', default='datacare_db'),
+            'USER': config('DB_USER', default='datacare_user'),
+            'PASSWORD': config('DB_PASSWORD', default='datacare_password'),
+            'HOST': config('DB_HOST', default='localhost'),
+            'PORT': config('DB_PORT', default='5432'),
+        }
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -197,4 +211,12 @@ AUTH_USER_MODEL = 'users.User'
 
 # Machine Learning Models Path
 ML_MODELS_PATH = BASE_DIR / 'data_pipeline' / 'models'
-ML_MODELS_PATH.mkdir(exist_ok=True)
+ML_MODELS_PATH.mkdir(parents=True, exist_ok=True)
+
+# Torna o pacote do pipeline de dados importável pelo backend, para reaproveitar
+# a MESMA feature engineering no treino do modelo e na predição da API.
+import sys
+
+DATA_PIPELINE_DIR = BASE_DIR / 'data_pipeline'
+if str(DATA_PIPELINE_DIR) not in sys.path:
+    sys.path.insert(0, str(DATA_PIPELINE_DIR))

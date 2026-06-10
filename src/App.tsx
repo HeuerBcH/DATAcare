@@ -1,18 +1,48 @@
-function App() {
+import { Navigate, Route, Routes } from 'react-router-dom';
+import { Layout } from './components/Layout';
+import { ProtectedRoute, homeForRole } from './components/ProtectedRoute';
+import { useAuth } from './context/AuthContext';
+import Alerts from './pages/Alerts';
+import Dashboard from './pages/Dashboard';
+import Login from './pages/Login';
+import TriageForm from './pages/TriageForm';
+import Visits from './pages/Visits';
+
+export default function App() {
+  const { user } = useAuth();
+
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="mx-auto flex max-w-3xl flex-col gap-4 px-6 py-16">
-        <p className="text-sm font-medium uppercase tracking-wide text-teal-700">
-          Data Care
-        </p>
-        <h1 className="text-3xl font-semibold">Ambiente pronto para desenvolvimento</h1>
-        <p className="text-slate-600">
-          Frontend React + Vite configurado. Próximo passo: implementar as histórias em{' '}
-          <code className="rounded bg-slate-200 px-1">documentacoes/IMPLEMENTACOES.md</code>.
-        </p>
-      </div>
-    </main>
+    <Routes>
+      <Route path="/login" element={<Login />} />
+
+      <Route
+        element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }
+      >
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute roles={['gestor', 'admin']}>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/triagem" element={<TriageForm />} />
+        <Route path="/visitas" element={<Visits />} />
+        <Route
+          path="/alertas"
+          element={
+            <ProtectedRoute roles={['gestor', 'admin']}>
+              <Alerts />
+            </ProtectedRoute>
+          }
+        />
+      </Route>
+
+      <Route path="*" element={<Navigate to={user ? homeForRole(user.role) : '/login'} replace />} />
+    </Routes>
   );
 }
-
-export default App;

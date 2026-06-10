@@ -13,6 +13,9 @@ urlpatterns = [
     # Auth JWT endpoints
     path('api/v1/auth/', include((auth_api_urlpatterns, 'auth'))),
 
+    # Triagem (domínio ACS — coração do MVP)
+    path('api/v1/triage/', include('apps.triage.urls')),
+
     # REST API endpoints
     path('api/v1/', include('apps.api.urls', namespace='api')),
 

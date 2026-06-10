@@ -73,6 +73,15 @@ ml/models/*.pkl
 ml/data/*.csv
 !ml/data/example.csv
 
+# Saídas geradas pelo pipeline / ML (regeráveis — ver documentacoes/RODAR_LOCAL.md)
+data_pipeline/data/interim/*.csv
+data_pipeline/data/interim/*.parquet
+data_pipeline/data/reports/eda/
+data_pipeline/models/*.joblib
+data_pipeline/models/*.pkl
+data_pipeline/models/metrics.json
+data_pipeline/models/model_card.md
+
 # ============================================
 # Logs
 # ============================================
