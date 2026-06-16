@@ -76,6 +76,60 @@ def train_disease(synthetic: bool = False) -> None:
     _save(pipeline, list(X.columns), "disease_classifier", report)
 
 
+def _resample_severity(X, y):
+    """
+    Balance the severity training set via undersampling + SMOTE.
+
+    Strategy:
+    - Undersample 'baixo' (0) to 10x the 'médio' count (caps at 300K)
+    - SMOTE 'alto' (2) up to the same count as 'médio'
+    This keeps the dataset manageable while giving the minority classes
+    enough signal for the model to learn from.
+    """
+    import numpy as np
+    from imblearn.over_sampling import SMOTE
+    from imblearn.under_sampling import RandomUnderSampler
+    from sklearn.impute import SimpleImputer
+
+    y_arr = np.asarray(y)
+    unique, cts = np.unique(y_arr, return_counts=True)
+    counts = dict(zip(unique.tolist(), cts.tolist()))
+    logger.info("Before resampling: %s", counts)
+
+    n_medio = counts.get(1, 0)
+    n_alto  = counts.get(2, 0)
+
+    if n_medio == 0 or n_alto == 0:
+        logger.warning("Skipping resampling — missing minority class")
+        return X, y_arr
+
+    # SMOTE requires no NaN — impute with 0 (same strategy as the pipeline)
+    imputer = SimpleImputer(strategy="constant", fill_value=0.0)
+    X = imputer.fit_transform(X)
+
+    # Step 1: undersample baixo to 10× médio (max 300K)
+    target_baixo = min(n_medio * 10, 300_000)
+    under = RandomUnderSampler(
+        sampling_strategy={0: target_baixo},
+        random_state=42,
+    )
+    X_res, y_res = under.fit_resample(X, y_arr)
+
+    # Step 2: SMOTE alto up to match médio (k_neighbors capped by minority size)
+    target_alto = n_medio
+    k = min(5, n_alto - 1)
+    smote = SMOTE(
+        sampling_strategy={2: target_alto},
+        k_neighbors=k,
+        random_state=42,
+    )
+    X_res, y_res = smote.fit_resample(X_res, y_res)
+
+    counts_after = y_res.value_counts() if hasattr(y_res, 'value_counts') else {v: (y_res == v).sum() for v in [0,1,2]}
+    logger.info("After resampling:  %s", dict(counts_after) if hasattr(counts_after, 'items') else counts_after)
+    return X_res, y_res
+
+
 def train_severity(synthetic: bool = False) -> None:
     logger.info("=== Training Severity Classifier ===")
 
@@ -94,16 +148,15 @@ def train_severity(synthetic: bool = False) -> None:
         X, y, test_size=0.2, stratify=y, random_state=42
     )
 
-    # Use sample weights to handle class imbalance (alto cases are rare in real data)
-    sample_weights = compute_sample_weight("balanced", y_train)
+    # Rebalance training set: undersample majority + SMOTE minority
+    X_train, y_train = _resample_severity(X_train, y_train)
 
     pipeline = build_severity_pipeline()
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     cv_f1 = cross_val_score(pipeline, X_train, y_train, cv=cv, scoring="f1_macro", n_jobs=-1)
     logger.info("CV macro-F1: %.4f ± %.4f", cv_f1.mean(), cv_f1.std())
 
-    # Re-fit on full train with sample weights
-    pipeline.fit(X_train, y_train, clf__sample_weight=sample_weights)
+    pipeline.fit(X_train, y_train)
 
     report = compute_metrics(
         pipeline, X_test, y_test,

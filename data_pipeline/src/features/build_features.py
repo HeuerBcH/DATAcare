@@ -65,7 +65,7 @@ def _add_demographic_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]
     """Return updated df and list of added column names."""
     added = []
     if "NU_IDADE_N" in df.columns:
-        df["age_years"] = df["NU_IDADE_N"].clip(0, 120).astype("float32")
+        df["age_years"] = pd.to_numeric(df["NU_IDADE_N"], errors="coerce").clip(0, 120).astype("float32")
         added.append("age_years")
     if "CS_SEXO" in df.columns:
         df["sex_M"] = (df["CS_SEXO"] == "M").astype("float32")
@@ -142,42 +142,142 @@ def build_disease_features() -> tuple[pd.DataFrame, pd.Series] | None:
 # Severity feature builder
 # ---------------------------------------------------------------------------
 
+def _severity_from_outcomes(df: pd.DataFrame) -> pd.Series:
+    """
+    Derive severity label from clinical outcomes for diseases where CLASSI_FIN
+    encodes diagnosis confirmation rather than severity (chikungunya, zika).
+
+    Rules (applied in ascending priority):
+      baixo (0): confirmed case, no alarm signs
+      medio (1): hospitalized (HOSPITALIZ=True or DT_INTERNA filled)
+      alto  (2): death (EVOLUCAO in {2,3} or DT_OBITO filled)
+    """
+    n = len(df)
+    severity = pd.Series(0, index=df.index, dtype=int)
+
+    hospitaliz = (
+        df["HOSPITALIZ"].fillna(False).astype(bool)
+        if "HOSPITALIZ" in df.columns
+        else pd.Series(False, index=df.index)
+    )
+    interna = (
+        df["DT_INTERNA"].notna()
+        if "DT_INTERNA" in df.columns
+        else pd.Series(False, index=df.index)
+    )
+    evolucao = (
+        df["EVOLUCAO"].astype(str)
+        if "EVOLUCAO" in df.columns
+        else pd.Series("1", index=df.index)
+    )
+    obito = (
+        df["DT_OBITO"].notna()
+        if "DT_OBITO" in df.columns
+        else pd.Series(False, index=df.index)
+    )
+
+    severity[hospitaliz | interna] = 1
+    severity[evolucao.isin(["2", "3"]) | obito] = 2
+    return severity
+
+
 def build_severity_features() -> tuple[pd.DataFrame, pd.Series] | None:
     """
     Build (X, y) for severity classification.
     y labels: 0=baixo, 1=medio, 2=alto.
-    Returns None if no parquet files are available.
+
+    Severity derivation per disease:
+    - Dengue: CLASSI_FIN (10=baixo, 11=médio, 12=alto) — MS official scale
+    - Chikungunya: outcomes-based (EVOLUCAO, HOSPITALIZ, DT_OBITO)
+      CLASSI_FIN encodes confirmation (13=confirmado, 5=descartado), not severity
+    - Zika: outcomes-based (EVOLUCAO, DT_OBITO)
     """
-    sinan_datasets = ["sinan_dengue", "sinan_chikungunya", "sinan_zika"]
     pieces: list[pd.DataFrame] = []
 
-    for ds_name in sinan_datasets:
-        df = _load_parquet(ds_name)
-        if df is None:
-            continue
-        if "CLASSI_FIN" not in df.columns:
-            logger.warning("%s: no CLASSI_FIN — skipping severity build", ds_name)
-            continue
+    # --- Dengue: CLASSI_FIN is the official severity scale ---
+    df_dengue = _load_parquet("sinan_dengue")
+    if df_dengue is not None and "CLASSI_FIN" in df_dengue.columns:
+        df_dengue = _add_temporal_features(df_dengue)
+        df_dengue, demo_cols = _add_demographic_features(df_dengue)
 
-        df = _add_temporal_features(df)
-        df, demo_cols = _add_demographic_features(df)
+        df_dengue["severity"] = (
+            pd.to_numeric(df_dengue["CLASSI_FIN"], errors="coerce")
+            .astype("Int64")
+            .map(SINAN_CLASSI_FIN_TO_SEVERITY)
+        )
+        df_dengue = df_dengue.dropna(subset=["severity"])
+        df_dengue["severity"] = df_dengue["severity"].astype(int)
 
-        df["severity"] = df["CLASSI_FIN"].map(SINAN_CLASSI_FIN_TO_SEVERITY)
-        df = df.dropna(subset=["severity"])
-        df["severity"] = df["severity"].astype(int)
-
-        symptom_cols = [c for c in SINAN_SYMPTOM_COLS if c in df.columns]
-        comorbidity_cols = [c for c in SINAN_COMORBIDITY_COLS if c in df.columns]
+        symptom_cols = [c for c in SINAN_SYMPTOM_COLS if c in df_dengue.columns]
+        comorbidity_cols = [c for c in SINAN_COMORBIDITY_COLS if c in df_dengue.columns]
         feature_cols = symptom_cols + comorbidity_cols + [
-            "notification_month", "notification_week"
+            "notification_month", "notification_week",
         ] + demo_cols
-
-        if "HOSPITALIZ" in df.columns:
+        if "HOSPITALIZ" in df_dengue.columns:
             feature_cols.append("HOSPITALIZ")
 
-        available = [c for c in feature_cols if c in df.columns]
-        chunk = df[available + ["severity"]].dropna(subset=available, how="all")
+        available = [c for c in feature_cols if c in df_dengue.columns]
+        chunk = df_dengue[available + ["severity"]].dropna(subset=available, how="all")
+        logger.info("Dengue severity: %d rows (baixo=%d médio=%d alto=%d)",
+                    len(chunk),
+                    (chunk["severity"] == 0).sum(),
+                    (chunk["severity"] == 1).sum(),
+                    (chunk["severity"] == 2).sum())
         pieces.append(chunk)
+
+    # --- Chikungunya: outcomes-based severity, confirmed cases only ---
+    df_chik = _load_parquet("sinan_chikungunya")
+    if df_chik is not None:
+        if "CLASSI_FIN" in df_chik.columns:
+            df_chik = df_chik[df_chik["CLASSI_FIN"].astype(str) == "13"].copy()
+
+        if len(df_chik) > 0:
+            df_chik = _add_temporal_features(df_chik)
+            df_chik, demo_cols = _add_demographic_features(df_chik)
+            df_chik["severity"] = _severity_from_outcomes(df_chik)
+
+            symptom_cols = [c for c in SINAN_SYMPTOM_COLS if c in df_chik.columns]
+            comorbidity_cols = [c for c in SINAN_COMORBIDITY_COLS if c in df_chik.columns]
+            feature_cols = symptom_cols + comorbidity_cols + [
+                "notification_month", "notification_week",
+            ] + demo_cols
+            if "HOSPITALIZ" in df_chik.columns:
+                feature_cols.append("HOSPITALIZ")
+
+            available = [c for c in feature_cols if c in df_chik.columns]
+            chunk = df_chik[available + ["severity"]].dropna(subset=available, how="all")
+            logger.info("Chikungunya severity: %d rows (baixo=%d médio=%d alto=%d)",
+                        len(chunk),
+                        (chunk["severity"] == 0).sum(),
+                        (chunk["severity"] == 1).sum(),
+                        (chunk["severity"] == 2).sum())
+            pieces.append(chunk)
+
+    # --- Zika: outcomes-based severity, confirmed cases only ---
+    df_zika = _load_parquet("sinan_zika")
+    if df_zika is not None:
+        if "CLASSI_FIN" in df_zika.columns:
+            df_zika = df_zika[df_zika["CLASSI_FIN"].astype(str) == "2"].copy()
+
+        if len(df_zika) > 0:
+            df_zika = _add_temporal_features(df_zika)
+            df_zika, demo_cols = _add_demographic_features(df_zika)
+            df_zika["severity"] = _severity_from_outcomes(df_zika)
+
+            symptom_cols = [c for c in SINAN_SYMPTOM_COLS if c in df_zika.columns]
+            comorbidity_cols = [c for c in SINAN_COMORBIDITY_COLS if c in df_zika.columns]
+            feature_cols = symptom_cols + comorbidity_cols + [
+                "notification_month", "notification_week",
+            ] + demo_cols
+
+            available = [c for c in feature_cols if c in df_zika.columns]
+            chunk = df_zika[available + ["severity"]].dropna(subset=available, how="all")
+            logger.info("Zika severity: %d rows (baixo=%d médio=%d alto=%d)",
+                        len(chunk),
+                        (chunk["severity"] == 0).sum(),
+                        (chunk["severity"] == 1).sum(),
+                        (chunk["severity"] == 2).sum())
+            pieces.append(chunk)
 
     if not pieces:
         return None
@@ -185,7 +285,8 @@ def build_severity_features() -> tuple[pd.DataFrame, pd.Series] | None:
     combined = pd.concat(pieces, ignore_index=True)
     y = combined.pop("severity").astype(int)
     X = combined
-    logger.info("Severity feature matrix: %d rows × %d cols", *X.shape)
+    logger.info("Severity feature matrix: %d rows × %d cols — class dist: %s",
+                len(X), X.shape[1], y.value_counts().to_dict())
     return X, y
 
 
