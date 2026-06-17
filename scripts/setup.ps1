@@ -11,7 +11,9 @@ Write-Host "Installing Node.js and Python dependencies..." -ForegroundColor Yell
 # Node.js Frontend Setup
 Write-Host ""
 Write-Host "==> Node.js (Frontend)" -ForegroundColor Cyan
+Set-Location $Root/frontend
 npm install
+Set-Location $Root
 
 # Environment file
 if (-not (Test-Path ".env")) {
@@ -81,6 +83,7 @@ Write-Host "   cd backend" -ForegroundColor Magenta
 Write-Host "   ..\venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000" -ForegroundColor Magenta
 Write-Host ""
 Write-Host "4. Start frontend (in new terminal):"
+Write-Host "   cd frontend" -ForegroundColor Magenta
 Write-Host "   npm run dev" -ForegroundColor Magenta
 Write-Host ""
 Write-Host "5. Access:"

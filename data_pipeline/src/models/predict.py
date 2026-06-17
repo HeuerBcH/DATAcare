@@ -9,8 +9,9 @@ import logging
 from functools import lru_cache
 from typing import Any
 
-import joblib
+import mlflow.sklearn
 import pandas as pd
+from mlflow.models import Model
 
 from .config import model_path, DISEASE_LABELS, SEVERITY_LABELS
 
@@ -19,15 +20,26 @@ logger = logging.getLogger(__name__)
 
 @lru_cache(maxsize=2)
 def _load_artifact(name: str) -> dict:
+    """Carrega o modelo MLflow salvo em ``models/<name>/`` e os feature names.
+
+    Os nomes das features vêm do *input schema* (signature) do modelo MLflow —
+    é assim que substituímos o antigo dict ``{"pipeline", "feature_names"}`` do
+    joblib mantendo a ordem das colunas usada no treino.
+    """
     path = model_path(name)
     if not path.exists():
         raise FileNotFoundError(
             f"Trained model not found at {path}. "
             "Run: python -m src.models.train --model all"
         )
-    artifact = joblib.load(path)
-    logger.info("Loaded model artifact: %s", name)
-    return artifact
+
+    pipeline = mlflow.sklearn.load_model(str(path))
+
+    schema = Model.load(str(path)).get_input_schema()
+    feature_names = list(schema.input_names()) if schema is not None else []
+
+    logger.info("Loaded MLflow model: %s (%d features)", name, len(feature_names))
+    return {"pipeline": pipeline, "feature_names": feature_names}
 
 
 def _build_input_frame(features: dict[str, Any], feature_names: list[str]) -> pd.DataFrame:

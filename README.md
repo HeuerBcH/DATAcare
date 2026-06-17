@@ -26,10 +26,14 @@ Triagem comunitária com ML, dashboard epidemiológico e API REST.
 ## Setup rápido
 
 ```bash
-# Frontend
-npm install
+# Variáveis de ambiente (na raiz, compartilhadas por frontend e backend)
 cp .env.example .env
+
+# Frontend
+cd frontend
+npm install
 npm run dev          # http://localhost:3000
+cd ..
 
 # Backend
 cd backend
@@ -44,9 +48,10 @@ python manage.py runserver
 **Modo demo (sem backend)** — dados mock realistas, sem precisar do Django:
 
 ```bash
-# Adicione ao .env:
+# Adicione ao .env (na raiz):
 VITE_USE_MOCK=true
 
+cd frontend
 npm run dev
 # Abra http://localhost:3000
 # Login automático como Gestor
@@ -55,7 +60,8 @@ npm run dev
 **Modo real (com backend):**
 
 ```bash
-# .env sem VITE_USE_MOCK (ou =false)
+# .env (na raiz) sem VITE_USE_MOCK (ou =false)
+cd frontend
 npm run dev
 # Login com usuário criado via: python manage.py createsuperuser
 ```
@@ -114,13 +120,16 @@ DATAcare/
 │   ├── apps/patients/
 │   ├── apps/predictions/
 │   └── config/settings.py
-├── data_pipeline/
+├── data_pipeline/              # PYTHONPATH=data_pipeline (imports: src.*)
 │   ├── src/
-│   │   ├── etl/                # Limpeza e split (feature/data-etl)
-│   │   ├── eda/                # Análise exploratória (feature/hu04-eda)
+│   │   ├── etl/                # Limpeza e split (HU-07)
 │   │   ├── features/           # Feature engineering (HU-05)
-│   │   └── models/             # Treinamento e inferência (HU-06)
-│   └── tests/
+│   │   ├── models/             # Treinamento e inferência (HU-06)
+│   │   └── utils/              # Logging compartilhado
+│   ├── models/                 # Artefatos .joblib treinados
+│   ├── notebooks/              # EDA pós-split (HU-04)
+│   ├── data/                   # interim/ · processed/ · reports/
+│   └── tests/                  # tests/etl · tests/ml
 ├── documentacoes/
 ├── requirements.txt
 └── requirements-ml.txt
