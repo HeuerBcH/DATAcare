@@ -18,6 +18,9 @@ from .config import (
     SRAG_SYMPTOM_COLS, SRAG_COMORBIDITY_COLS,
     SINAN_CLASSI_FIN_TO_SEVERITY,
     DISEASE_LABELS, SEVERITY_LABELS,
+    DISEASE_GEO_COLS, SEVERITY_GEO_COLS,
+    DISEASE_DEMO_COLS, DISEASE_INCLUDE_TEMPORAL,
+    SEVERITY_ALARM_COLS, SEVERITY_ELDERLY_AGE,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,14 +65,49 @@ def _add_temporal_features(df: pd.DataFrame, date_col: str = "DT_NOTIFIC") -> pd
 
 
 def _add_demographic_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
-    """Return updated df and list of added column names."""
+    """Return updated df and list of added column names.
+
+    A idade vem de ``idade_anos`` (idade já decodificada pelo ETL, em anos).
+    Fallback para ``NU_IDADE_N`` apenas se ``idade_anos`` não existir — e nesse
+    caso decodificamos o código SINAN (``4xxx`` = anos), em vez de usar o número
+    cru. Usar ``NU_IDADE_N`` direto (ex.: 4072) com ``clip(0,120)`` saturava a
+    idade em 120 para TODOS, criando um vazamento de dataset (SINAN≈120 vs SRAG
+    real) e quebrando regras baseadas em idade.
+    """
     added = []
-    if "NU_IDADE_N" in df.columns:
-        df["age_years"] = pd.to_numeric(df["NU_IDADE_N"], errors="coerce").clip(0, 120).astype("float32")
+    if "idade_anos" in df.columns:
+        df["age_years"] = (
+            pd.to_numeric(df["idade_anos"], errors="coerce").clip(0, 120).astype("float32")
+        )
+        added.append("age_years")
+    elif "NU_IDADE_N" in df.columns:
+        code = pd.to_numeric(df["NU_IDADE_N"], errors="coerce")
+        # SINAN: 1xxx=horas, 2xxx=dias, 3xxx=meses, 4xxx=anos. Só 4xxx vira idade
+        # em anos; unidades menores são < 1 ano → 0.
+        years = (code - 4000).where(code >= 4000, 0).clip(0, 120)
+        df["age_years"] = years.astype("float32")
         added.append("age_years")
     if "CS_SEXO" in df.columns:
         df["sex_M"] = (df["CS_SEXO"] == "M").astype("float32")
         added.append("sex_M")
+    return df, added
+
+
+def _add_geographic_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """Add UF + município codes as numeric features.
+
+    Surtos de arboviroses são fortemente agrupados no espaço-tempo, então a
+    localização é um dos sinais mais discriminativos entre dengue, chikungunya
+    e zika (que têm sintomas sobrepostos). Codes numéricos crus já permitem que
+    modelos de árvore particionem por região.
+    """
+    added: list[str] = []
+    if "SG_UF_NOT" in df.columns:
+        df["uf_code"] = pd.to_numeric(df["SG_UF_NOT"], errors="coerce").astype("float32")
+        added.append("uf_code")
+    if "ID_MUNICIP" in df.columns:
+        df["munic_code"] = pd.to_numeric(df["ID_MUNICIP"], errors="coerce").astype("float32")
+        added.append("munic_code")
     return df, added
 
 
@@ -96,12 +134,16 @@ def build_disease_features() -> tuple[pd.DataFrame, pd.Series] | None:
             continue
         df = _add_temporal_features(df)
         df, demo_cols = _add_demographic_features(df)
+        df, geo_cols = _add_geographic_features(df)
 
         symptom_cols = [c for c in SINAN_SYMPTOM_COLS if c in df.columns]
         comorbidity_cols = [c for c in SINAN_COMORBIDITY_COLS if c in df.columns]
-        feature_cols = symptom_cols + comorbidity_cols + [
-            "notification_month", "notification_week"
-        ] + demo_cols
+        temporal_cols = ["notification_month", "notification_week"] if DISEASE_INCLUDE_TEMPORAL else []
+        feature_cols = (
+            symptom_cols + comorbidity_cols + temporal_cols
+            + [c for c in demo_cols if c in DISEASE_DEMO_COLS]
+            + [c for c in geo_cols if c in DISEASE_GEO_COLS]
+        )
 
         available = [c for c in feature_cols if c in df.columns]
         chunk = df[available].copy()
@@ -114,12 +156,16 @@ def build_disease_features() -> tuple[pd.DataFrame, pd.Series] | None:
     if df_srag is not None:
         df_srag = _add_temporal_features(df_srag)
         df_srag, demo_cols = _add_demographic_features(df_srag)
+        df_srag, geo_cols = _add_geographic_features(df_srag)
 
         symptom_cols = [c for c in SRAG_SYMPTOM_COLS if c in df_srag.columns]
         comorbidity_cols = [c for c in SRAG_COMORBIDITY_COLS if c in df_srag.columns]
-        feature_cols = symptom_cols + comorbidity_cols + [
-            "notification_month", "notification_week"
-        ] + demo_cols
+        temporal_cols = ["notification_month", "notification_week"] if DISEASE_INCLUDE_TEMPORAL else []
+        feature_cols = (
+            symptom_cols + comorbidity_cols + temporal_cols
+            + [c for c in demo_cols if c in DISEASE_DEMO_COLS]
+            + [c for c in geo_cols if c in DISEASE_GEO_COLS]
+        )
 
         available = [c for c in feature_cols if c in df_srag.columns]
         chunk = df_srag[available].copy()
@@ -142,42 +188,52 @@ def build_disease_features() -> tuple[pd.DataFrame, pd.Series] | None:
 # Severity feature builder
 # ---------------------------------------------------------------------------
 
-def _severity_from_outcomes(df: pd.DataFrame) -> pd.Series:
-    """
-    Derive severity label from clinical outcomes for diseases where CLASSI_FIN
-    encodes diagnosis confirmation rather than severity (chikungunya, zika).
+def _severity_from_triage(df: pd.DataFrame) -> pd.Series:
+    """Nível de risco de triagem (Fix 6a) a partir de features previsíveis.
 
-    Rules (applied in ascending priority):
-      baixo (0): confirmed case, no alarm signs
-      medio (1): hospitalized (HOSPITALIZ=True or DT_INTERNA filled)
-      alto  (2): death (EVOLUCAO in {2,3} or DT_OBITO filled)
+    Diferente de ``_severity_from_outcomes`` (que usa óbito/EVOLUCAO, não
+    disponíveis como feature), esta regra usa apenas sinais conhecidos no
+    atendimento — e que o dashboard envia ao modelo:
+
+      medio (1): qualquer fator de risco — idoso (≥60), ≥1 comorbidade,
+                 sinal de alarme (PETEQUIA_N/LEUCOPENIA/LACO) ou hospitalização.
+      alto  (2): hospitalizado E com agravante — idoso, ≥2 comorbidades, ou
+                 sinal de alarme.
+
+    Como o rótulo passa a ser função das features, o classificador consegue
+    aprendê-lo (recall de "alto" deixa de ser ~0).
     """
-    n = len(df)
     severity = pd.Series(0, index=df.index, dtype=int)
 
-    hospitaliz = (
-        df["HOSPITALIZ"].fillna(False).astype(bool)
-        if "HOSPITALIZ" in df.columns
-        else pd.Series(False, index=df.index)
-    )
-    interna = (
-        df["DT_INTERNA"].notna()
-        if "DT_INTERNA" in df.columns
-        else pd.Series(False, index=df.index)
-    )
-    evolucao = (
-        df["EVOLUCAO"].astype(str)
-        if "EVOLUCAO" in df.columns
-        else pd.Series("1", index=df.index)
-    )
-    obito = (
-        df["DT_OBITO"].notna()
-        if "DT_OBITO" in df.columns
-        else pd.Series(False, index=df.index)
-    )
+    if "age_years" in df.columns:
+        age = pd.to_numeric(df["age_years"], errors="coerce").fillna(0)
+    else:
+        age = pd.Series(0, index=df.index)
+    elderly = age >= SEVERITY_ELDERLY_AGE
 
-    severity[hospitaliz | interna] = 1
-    severity[evolucao.isin(["2", "3"]) | obito] = 2
+    def _positive_flags(cols: list[str]) -> pd.DataFrame:
+        # cast p/ object antes de to_numeric: colunas booleanas nullable do
+        # pandas não aceitam fillna(0); via object, True/False/NaN viram 1/0/NaN.
+        present = [c for c in cols if c in df.columns]
+        if not present:
+            return pd.DataFrame(index=df.index)
+        num = df[present].apply(lambda s: pd.to_numeric(s.astype("object"), errors="coerce"))
+        return num.fillna(0.0) > 0
+
+    comorb_flags = _positive_flags(SINAN_COMORBIDITY_COLS)
+    n_comorb = comorb_flags.sum(axis=1) if not comorb_flags.empty else pd.Series(0, index=df.index)
+
+    alarm_flags = _positive_flags(SEVERITY_ALARM_COLS)
+    alarm = alarm_flags.any(axis=1) if not alarm_flags.empty else pd.Series(False, index=df.index)
+
+    hosp = pd.Series(False, index=df.index)
+    if "HOSPITALIZ" in df.columns:
+        hosp = hosp | df["HOSPITALIZ"].fillna(False).astype(bool)
+    if "DT_INTERNA" in df.columns:
+        hosp = hosp | df["DT_INTERNA"].notna()
+
+    severity[elderly | (n_comorb >= 1) | alarm | hosp] = 1
+    severity[hosp & (elderly | (n_comorb >= 2) | alarm)] = 2
     return severity
 
 
@@ -186,11 +242,13 @@ def build_severity_features() -> tuple[pd.DataFrame, pd.Series] | None:
     Build (X, y) for severity classification.
     y labels: 0=baixo, 1=medio, 2=alto.
 
-    Severity derivation per disease:
-    - Dengue: CLASSI_FIN (10=baixo, 11=médio, 12=alto) — MS official scale
-    - Chikungunya: outcomes-based (EVOLUCAO, HOSPITALIZ, DT_OBITO)
-      CLASSI_FIN encodes confirmation (13=confirmado, 5=descartado), not severity
-    - Zika: outcomes-based (EVOLUCAO, DT_OBITO)
+    Severity derivation per disease (Fix 6a — risco de triagem):
+    - Dengue: escala oficial MS (CLASSI_FIN 10/11/12) ELEVADA pelo risco de
+      triagem (máximo entre as duas) — mantém a gravidade confirmada e adiciona
+      casos "alto" previsíveis pelas features.
+    - Chikungunya / Zika: risco de triagem (idade, comorbidades, sinais de
+      alarme, hospitalização), pois o CLASSI_FIN aqui codifica confirmação, não
+      severidade. Substitui a antiga regra por óbito/EVOLUCAO (não-aprendível).
     """
     pieces: list[pd.DataFrame] = []
 
@@ -199,6 +257,7 @@ def build_severity_features() -> tuple[pd.DataFrame, pd.Series] | None:
     if df_dengue is not None and "CLASSI_FIN" in df_dengue.columns:
         df_dengue = _add_temporal_features(df_dengue)
         df_dengue, demo_cols = _add_demographic_features(df_dengue)
+        df_dengue, geo_cols = _add_geographic_features(df_dengue)
 
         df_dengue["severity"] = (
             pd.to_numeric(df_dengue["CLASSI_FIN"], errors="coerce")
@@ -207,12 +266,20 @@ def build_severity_features() -> tuple[pd.DataFrame, pd.Series] | None:
         )
         df_dengue = df_dengue.dropna(subset=["severity"])
         df_dengue["severity"] = df_dengue["severity"].astype(int)
+        # Fix 6a: mantém a escala oficial da dengue (CLASSI_FIN) e a eleva pelo
+        # risco de triagem — o máximo entre as duas. Isso adiciona casos "alto"
+        # previsíveis pelas features (idoso/comorbidade/alarme + hospitalização),
+        # sem rebaixar a gravidade clínica já confirmada.
+        df_dengue["severity"] = np.maximum(
+            df_dengue["severity"].to_numpy(),
+            _severity_from_triage(df_dengue).to_numpy(),
+        )
 
         symptom_cols = [c for c in SINAN_SYMPTOM_COLS if c in df_dengue.columns]
         comorbidity_cols = [c for c in SINAN_COMORBIDITY_COLS if c in df_dengue.columns]
         feature_cols = symptom_cols + comorbidity_cols + [
             "notification_month", "notification_week",
-        ] + demo_cols
+        ] + demo_cols + [c for c in geo_cols if c in SEVERITY_GEO_COLS]
         if "HOSPITALIZ" in df_dengue.columns:
             feature_cols.append("HOSPITALIZ")
 
@@ -234,13 +301,14 @@ def build_severity_features() -> tuple[pd.DataFrame, pd.Series] | None:
         if len(df_chik) > 0:
             df_chik = _add_temporal_features(df_chik)
             df_chik, demo_cols = _add_demographic_features(df_chik)
-            df_chik["severity"] = _severity_from_outcomes(df_chik)
+            df_chik, geo_cols = _add_geographic_features(df_chik)
+            df_chik["severity"] = _severity_from_triage(df_chik)
 
             symptom_cols = [c for c in SINAN_SYMPTOM_COLS if c in df_chik.columns]
             comorbidity_cols = [c for c in SINAN_COMORBIDITY_COLS if c in df_chik.columns]
             feature_cols = symptom_cols + comorbidity_cols + [
                 "notification_month", "notification_week",
-            ] + demo_cols
+            ] + demo_cols + [c for c in geo_cols if c in SEVERITY_GEO_COLS]
             if "HOSPITALIZ" in df_chik.columns:
                 feature_cols.append("HOSPITALIZ")
 
@@ -262,13 +330,16 @@ def build_severity_features() -> tuple[pd.DataFrame, pd.Series] | None:
         if len(df_zika) > 0:
             df_zika = _add_temporal_features(df_zika)
             df_zika, demo_cols = _add_demographic_features(df_zika)
-            df_zika["severity"] = _severity_from_outcomes(df_zika)
+            df_zika, geo_cols = _add_geographic_features(df_zika)
+            df_zika["severity"] = _severity_from_triage(df_zika)
 
             symptom_cols = [c for c in SINAN_SYMPTOM_COLS if c in df_zika.columns]
             comorbidity_cols = [c for c in SINAN_COMORBIDITY_COLS if c in df_zika.columns]
             feature_cols = symptom_cols + comorbidity_cols + [
                 "notification_month", "notification_week",
-            ] + demo_cols
+            ] + demo_cols + [c for c in geo_cols if c in SEVERITY_GEO_COLS]
+            if "HOSPITALIZ" in df_zika.columns:
+                feature_cols.append("HOSPITALIZ")
 
             available = [c for c in feature_cols if c in df_zika.columns]
             chunk = df_zika[available + ["severity"]].dropna(subset=available, how="all")
@@ -302,7 +373,8 @@ def make_synthetic_disease(n_per_class: int = 2_000) -> tuple[pd.DataFrame, pd.S
     cols = (
         SINAN_SYMPTOM_COLS
         + SINAN_COMORBIDITY_COLS
-        + ["notification_month", "notification_week", "age_years", "sex_M"]
+        + ["notification_month", "notification_week", "age_years", "sex_M",
+           "uf_code", "munic_code"]
     )
     X = pd.DataFrame(
         rng.choice([0.0, 1.0], size=(n, len(cols)), p=[0.65, 0.35]).astype("float32"),
@@ -333,6 +405,16 @@ def make_synthetic_disease(n_per_class: int = 2_000) -> tuple[pd.DataFrame, pd.S
     X["notification_month"] = rng.integers(1, 13, size=n).astype("float32")
     X["notification_week"] = rng.integers(1, 53, size=n).astype("float32")
 
+    # Geografia correlacionada à classe (surtos são regionais) — espelha o sinal
+    # geográfico observado nos dados reais (UF/município).
+    uf_centers = {0: 26, 1: 23, 2: 29, 3: 35}
+    for cls, center in uf_centers.items():
+        idx = labels == cls
+        X.loc[idx, "uf_code"] = np.clip(
+            rng.normal(center, 4, size=idx.sum()), 11, 53
+        ).astype("float32")
+    X["munic_code"] = (X["uf_code"] * 10000 + rng.integers(0, 9999, size=n)).astype("float32")
+
     return X, pd.Series(labels, name="_label")
 
 
@@ -344,7 +426,8 @@ def make_synthetic_severity(n_per_class: int = 2_000) -> tuple[pd.DataFrame, pd.
     cols = (
         SINAN_SYMPTOM_COLS
         + SINAN_COMORBIDITY_COLS
-        + ["HOSPITALIZ", "notification_month", "notification_week", "age_years", "sex_M"]
+        + ["HOSPITALIZ", "notification_month", "notification_week", "age_years", "sex_M",
+           "uf_code", "munic_code"]
     )
     X = pd.DataFrame(
         rng.choice([0.0, 1.0], size=(n, len(cols)), p=[0.70, 0.30]).astype("float32"),
@@ -375,5 +458,7 @@ def make_synthetic_severity(n_per_class: int = 2_000) -> tuple[pd.DataFrame, pd.
     X["sex_M"] = rng.choice([0.0, 1.0], size=n).astype("float32")
     X["notification_month"] = rng.integers(1, 13, size=n).astype("float32")
     X["notification_week"] = rng.integers(1, 53, size=n).astype("float32")
+    X["uf_code"] = rng.integers(11, 54, size=n).astype("float32")
+    X["munic_code"] = (X["uf_code"] * 10000 + rng.integers(0, 9999, size=n)).astype("float32")
 
     return X, pd.Series(labels, name="severity")

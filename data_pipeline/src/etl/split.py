@@ -2,7 +2,7 @@
 
 Uso:
     python -m data_pipeline.src.etl.split                       # todos
-    python -m data_pipeline.src.etl.split --dataset pns_2019    # um só
+    python -m data_pipeline.src.etl.split --dataset sinan_dengue    # um só
     python -m data_pipeline.src.etl.split --train 0.7 --val 0.15 --test 0.15
 """
 

@@ -1,0 +1,51 @@
+# ---- Python ----
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+.venv/
+venv/
+env/
+
+# ---- Node / frontend ----
+frontend/node_modules/
+frontend/dist/
+**/node_modules/
+
+# ---- Dados brutos e intermediários (montados via volume, não vão na imagem) ----
+data_pipeline/data/
+Dados/
+**/*.parquet
+**/*.csv
+
+# ---- Artefatos de ML (gerados em runtime) ----
+data_pipeline/mlruns/
+mlruns/
+data_pipeline/models/*/
+*.joblib
+
+# ---- Logs e temporários ----
+*.log
+logs/
+backend/staticfiles/
+backend/media/
+
+# ---- Git / IDE ----
+.git/
+.gitignore
+.idea/
+.vscode/
+
+# ---- Secrets / variáveis de ambiente (não vão na imagem; o compose injeta via
+#      environment: e monta .:/app, então o runtime não depende disso) ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---- Docker ----
+docker-compose*.yaml
+Dockerfile*
+.dockerignore

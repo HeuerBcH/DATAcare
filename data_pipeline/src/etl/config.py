@@ -164,39 +164,6 @@ DATASETS: dict[str, DatasetSpec] = {
         yes_no_columns=_SRAG_YES_NO,
         quoting=0,
     ),
-    "pns_2019": DatasetSpec(
-        name="pns_2019",
-        family="pns",
-        filename="pns2019.csv",
-        # PNS é survey clusterizado: agrupar por UPA é obrigatório.
-        group_column="UPA_PNS",
-        stratify_column="V0001",  # UF
-        split_strategy="grouped",
-    ),
-    "taxa_incid_dengue": DatasetSpec(
-        name="taxa_incid_dengue",
-        family="taxa_incid",
-        filename="taxa_incid_dengue.csv",
-        time_column="co_anomes",
-        split_strategy="temporal",
-        fallback_group_column="co_ibge",
-    ),
-    "taxa_incid_zika": DatasetSpec(
-        name="taxa_incid_zika",
-        family="taxa_incid",
-        filename="taxa_incid_zika.csv",
-        time_column="co_anomes",
-        split_strategy="temporal",
-        fallback_group_column="co_ibge",
-    ),
-    "taxa_incid_chikungunya": DatasetSpec(
-        name="taxa_incid_chikungunya",
-        family="taxa_incid",
-        filename="taxa_indic_chikungunya.csv",
-        time_column="co_anomes",
-        split_strategy="temporal",
-        fallback_group_column="co_ibge",
-    ),
 }
 
 

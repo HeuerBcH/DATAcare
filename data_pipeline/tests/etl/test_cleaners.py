@@ -20,7 +20,16 @@ from src.etl.cleaners.base import BaseCleaner  # noqa: E402
 from src.etl.cleaners.sinan import SinanCleaner  # noqa: E402
 from src.etl.cleaners.srag import SragCleaner  # noqa: E402
 from src.etl.cleaners.taxa_incid import TaxaIncidCleaner  # noqa: E402
-from src.etl.config import DATASETS  # noqa: E402
+from src.etl.config import DATASETS, DatasetSpec  # noqa: E402
+
+_TAXA_INCID_SPEC = DatasetSpec(
+    name="taxa_incid_test",
+    family="taxa_incid",
+    filename="taxa_incid_dengue.csv",
+    time_column="co_anomes",
+    split_strategy="temporal",
+    fallback_group_column="co_ibge",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -132,7 +141,7 @@ class TestTaxaIncidCleaner:
             "vl_indicador_calculado_mun": ["12.3", "45.6"],
             "vl_indicador_calculado_uf":  ["7.8", "9.1"],
         })
-        cleaner = TaxaIncidCleaner(DATASETS["taxa_incid_dengue"])
+        cleaner = TaxaIncidCleaner(_TAXA_INCID_SPEC)
         out = cleaner.transform_chunk(df)
         assert pd.api.types.is_numeric_dtype(out["vl_indicador_calculado_mun"])
         assert out["vl_indicador_calculado_mun"].iloc[0] == 12.3
@@ -142,7 +151,7 @@ class TestTaxaIncidCleaner:
             "co_anomes": ["202401"],
             "co_ibge":   ["3550308"],
         })
-        cleaner = TaxaIncidCleaner(DATASETS["taxa_incid_dengue"])
+        cleaner = TaxaIncidCleaner(_TAXA_INCID_SPEC)
         out = cleaner.transform_chunk(df)
         assert out["co_ibge"].dtype == "string"
         assert out["co_ibge"].iloc[0] == "3550308"

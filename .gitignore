@@ -67,7 +67,6 @@ db.sqlite3-journal
 /media
 /staticfiles
 /static
-manage.py
 local_settings.py
 /logs
 
@@ -78,6 +77,10 @@ ml/models/*.joblib
 ml/models/*.pkl
 ml/data/*.csv
 !ml/data/example.csv
+
+# Modelos MLflow de serving (diretórios gerados pelo treino) e tracking local
+data_pipeline/models/*/
+data_pipeline/mlruns/
 
 # ============================================
 # Data pipeline outputs (gerados a partir dos brutos)
@@ -139,11 +142,6 @@ ehthumbs.db
 *.swp
 *~
 .#*
-
-# ============================================
-# Docker
-# ============================================
-.dockerignore
 
 # ============================================
 # CI/CD
