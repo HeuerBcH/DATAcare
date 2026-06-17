@@ -86,9 +86,11 @@ já que o artefato que importa para a stack é o parquet leve.
 
 | Decisão | Por quê |
 |---------|---------|
-| **Random Forest + Árvore de Decisão** (sem XGBoost) | Ambos estão na lista permitida pela disciplina. RF é robusto, lida bem com features mistas e desbalanceamento; a Árvore é um *baseline* interpretável para comparação. Comparamos os dois e salvamos o melhor por tarefa. |
+| **Random Forest + Árvore de Decisão** | Ambos estão na lista permitida pela disciplina. RF é robusto, lida bem com features mistas e desbalanceamento; a Árvore é um *baseline* interpretável para comparação. Comparamos os dois e salvamos o melhor por tarefa. |
 | **Split temporal** (não aleatório) | Em produção o modelo só vê casos futuros. Split aleatório vazaria sazonalidade e inflaria as métricas. |
-| **Features geográficas** (`uf_code`, `munic_code`) | Surtos são agrupados no espaço-tempo; como os sintomas se sobrepõem, a localização separa as arboviroses. Elevou a acurácia de doença de ~87% para ~93%. |
+| **Sem geografia nos modelos** | O código do município/UF seria *target leakage* por proveniência: cada doença é notificada em municípios distintos e a dengue domina o volume, então o município agiria como proxy do rótulo — o modelo memorizaria a região em vez de aprender os sintomas. A triagem usa apenas sinais clínicos; a geografia fica como metadado fora de `X`. |
+| **`class_weight="balanced"`** | Combate o desbalanceamento extremo (dengue 73%, "baixo" 97%) ponderando as classes pelo inverso da frequência, dentro do estimador (por fold, sem reamostragem prévia). Faz o modelo deixar de "chutar" a classe majoritária. |
+| **Idade em anos (`idade_anos`)** | A idade entra como idade real em anos (não o código bruto `NU_IDADE_N`), funcionando como sinal clínico legítimo sem virar proxy do dataset. |
 | **Parquet como formato intermediário** | ~12× menor que CSV, preserva tipos, leitura/escrita rápidas. |
 | **MLflow para tracking** | Cada treino é auditável e comparável; o modelo é versionado e servido ao backend. |
 | **Configuração centralizada** (`DATASETS`, `config.py`) | Adicionar uma fonte é uma única entrada; sem *magic strings*. |
@@ -104,8 +106,11 @@ já que o artefato que importa para a stack é o parquet leve.
    `NU_IDADE_N` composto, preserva IDs IBGE e deduplica. → `data/interim/*.parquet`
 2. **ETL — split** (`src/etl/split.py`): separa em treino/val/teste com
    estratégia **temporal** e valida **anti-vazamento**. → `data/processed/` + `reports/`
-3. **Feature engineering** (`src/features/`): monta as matrizes `(X, y)` de
-   doença e severidade (sintomas, comorbidades, demografia, tempo, geografia).
+3. **Feature engineering** (`src/features/`): monta as matrizes `(X, y)`.
+   **Doença**: sintomas + comorbidades + sexo + idade (sem geografia/temporal,
+   que seriam proxy de proveniência). **Severidade**: sintomas + comorbidades +
+   demografia + hospitalização, com "alto" definido por **risco de triagem**
+   (idade, comorbidades, sinais de alarme, hospitalização).
 4. **Treino + validação** (`src/models/`): compara RF × Árvore, faz busca de
    hiperparâmetros + validação cruzada, escolhe o melhor e o salva para serving,
    registrando tudo no MLflow.
@@ -121,14 +126,16 @@ Para cada tarefa treinamos e comparamos **2 algoritmos** e salvamos o melhor (po
 CV macro-F1) em `data_pipeline/models/<task>/` (formato `mlflow.sklearn`), que o
 backend Django carrega para inferência.
 
-| Tarefa | Modelo selecionado | Acurácia (holdout) |
-|--------|--------------------|--------------------|
-| Doença | Árvore de Decisão | **~93,6%** |
-| Severidade | Random Forest | **~96,3%** |
+| Tarefa | Modelo selecionado | Acurácia (holdout) | Balanced accuracy |
+|--------|--------------------|--------------------|-------------------|
+| Doença | Random Forest | **~76,4%** | **~81,7%** |
+| Severidade | Random Forest | **~99,4%** | **~97,9%** |
 
-> Resultados em dados reais (≈400k amostras). A análise completa — incluindo a
-> ressalva honesta sobre a macro-F1 baixa da severidade (classes graves
-> raríssimas) — está em
+> Resultados em dados reais (≈400k amostras). A acurácia de doença (~76%) reflete
+> uma predição **dirigida pelos sintomas** (chikungunya clássico → chikungunya,
+> influenza → influenza): como dengue, chikungunya e zika têm sintomas
+> sobrepostos — e a zika não traz colunas de sintoma nos dados — esse é o teto
+> realista para uma classificação clínica honesta. A análise completa está em
 > [`VALIDACAO.md`](./VALIDACAO.md#73-resultados-holdout-dados-reais-400k-amostras).
 
 ---
@@ -170,7 +177,10 @@ data_pipeline/
 ```
 
 > Os **dados brutos** (`Dados/*.csv`) ficam **fora do repositório**, na raiz do
-> workspace (irmã de `DATAcare/`) — ver [`EXECUCAO.md`](./EXECUCAO.md#2-obter-os-dados-e-criar-a-pasta-dados).
+> workspace (irmã de `DATAcare/`). Baixe-os no Google Drive da equipe —
+> **[Dados DATAcare](https://drive.google.com/drive/folders/1h3oeVmGDSjGjdX6Gzc-0i37rX-Ma6yMI?usp=sharing)**
+> — e siga o passo a passo em
+> [`EXECUCAO.md`](./EXECUCAO.md#2-obter-os-dados-e-criar-a-pasta-dados).
 
 ---
 
@@ -179,7 +189,7 @@ data_pipeline/
 | Camada | Tecnologias |
 |--------|-------------|
 | ETL & dados | Python 3.11, pandas, pyarrow (parquet) |
-| ML | scikit-learn (Random Forest, Decision Tree), imbalanced-learn (SMOTE) |
+| ML | scikit-learn (Random Forest, Decision Tree, `class_weight="balanced"`) |
 | MLOps | MLflow 2.10 (tracking + UI + serving) |
 | Visualização | Streamlit + Plotly (dashboard ETL/ML) |
 | Serving | Django + DRF (carrega o modelo MLflow para inferência) |

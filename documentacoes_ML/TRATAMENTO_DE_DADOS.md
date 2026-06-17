@@ -270,15 +270,19 @@ rótulos é **fonte única** em `data_pipeline/src/features/config.py`.
 | Sintomas (SINAN) | `FEBRE`, `MIALGIA`, `EXANTEMA`, `ARTRALGIA`, `PETEQUIA_N`, ... | colunas booleanas limpas |
 | Sintomas (SRAG) | `FEBRE`, `TOSSE`, `DISPNEIA`, `DIARREIA`, ... | colunas booleanas limpas |
 | Comorbidades | `DIABETES`, `RENAL`, `HIPERTENSA`, `CARDIOPATI`, ... | colunas booleanas limpas |
-| Demográficas | `age_years` (de `NU_IDADE_N`), `sex_M` (de `CS_SEXO`) | derivadas |
-| Temporais | `notification_month`, `notification_week` (de `DT_NOTIFIC`) | derivadas |
-| **Geográficas** | `uf_code` (de `SG_UF_NOT`), `munic_code` (de `ID_MUNICIP`) | derivadas |
+| Demográficas | `age_years` (de `idade_anos`), `sex_M` (de `CS_SEXO`) | derivadas |
+| Temporais | `notification_month`, `notification_week` (de `DT_NOTIFIC`) | derivadas (só severidade) |
+| Geográficas | `uf_code`, `munic_code` | **só metadado — fora dos modelos** |
 
-> **Por que features geográficas são decisivas.** Surtos de arboviroses são
-> fortemente agrupados no espaço-tempo. Como dengue, chikungunya e zika têm
-> **sintomas sobrepostos**, a localização é um dos sinais mais discriminativos
-> entre elas. Modelos de árvore particionam por região naturalmente — foi o
-> fator que elevou a acurácia do classificador de doença de ~87% para ~93%.
+> **Por que NÃO usamos geografia nos modelos.** O código do município
+> (`munic_code`) seria um *vazamento de alvo*: cada doença é notificada em
+> municípios distintos e a dengue domina o volume, então o município agiria como
+> proxy quase perfeito do arquivo de origem — o modelo aprenderia "município ⇒
+> doença" em vez dos sintomas, travando a predição na classe majoritária. No
+> SRAG/influenza o município/UF vêm como texto, o que ainda identificaria a
+> classe trivialmente. Por isso a geografia fica como **metadado** (para o
+> dashboard), fora de `X`. A idade entra como `idade_anos` (idade real em anos),
+> um sinal clínico legítimo que não identifica o dataset.
 
 ### 8.2. Classificador de doença (`build_disease_features`)
 
@@ -296,17 +300,25 @@ Combina os três SINAN + o SRAG, atribuindo o rótulo de doença:
 A severidade (`0=baixo`, `1=medio`, `2=alto`) é derivada de forma diferente por
 doença, refletindo como cada sistema codifica gravidade:
 
-- **Dengue:** usa `CLASSI_FIN`, a escala oficial do Ministério da Saúde
-  (`10 → baixo`, `11 → médio`, `12/13 → alto`).
-- **Chikungunya / Zika:** `CLASSI_FIN` codifica *confirmação diagnóstica*, não
-  gravidade. Então a severidade é derivada dos **desfechos clínicos**:
-  hospitalização (`HOSPITALIZ` / `DT_INTERNA`) → médio; óbito
-  (`EVOLUCAO ∈ {2,3}` / `DT_OBITO`) → alto. Apenas casos confirmados entram.
+A severidade é um **nível de risco de triagem**, derivado de sinais conhecidos
+no atendimento — e que o dashboard envia ao modelo:
 
-> **Desbalanceamento.** As classes graves são raríssimas (médio ≈ 2,4%,
-> alto ≈ 0,2%). O treino lida com isso via **estratificação** no split/validação
-> e **reamostragem** (RandomUnderSampler + SMOTE) no conjunto de treino de
-> severidade. As implicações nas métricas estão em
+- **médio (1):** qualquer fator de risco — idoso (≥60 anos), ≥1 comorbidade,
+  sinal de alarme (`PETEQUIA_N`/`LEUCOPENIA`/`LACO`) ou hospitalização.
+- **alto (2):** hospitalizado **E** com agravante (idoso, ≥2 comorbidades ou
+  sinal de alarme).
+- **Dengue:** preserva a escala oficial `CLASSI_FIN` (`10→baixo`, `11→médio`,
+  `12/13→alto`) e a **eleva** pelo risco de triagem (máximo entre as duas).
+
+> **Por que por triagem.** Definir "alto" por sinais previsíveis no atendimento
+> (em vez de desfechos como óbito/`EVOLUCAO`, que não entram como feature) alinha
+> o rótulo às variáveis disponíveis — o modelo consegue aprendê-lo, com recall de
+> "alto" em ~0,95.
+
+> **Desbalanceamento.** O balanceamento usa **`class_weight="balanced"`** dentro
+> do estimador (por fold), em vez de reamostragem prévia (SMOTE) — que vazaria
+> pontos sintéticos entre os folds e inflaria a validação cruzada. As
+> implicações nas métricas estão em
 > [`VALIDACAO.md`](./VALIDACAO.md#73-resultados-holdout-dados-reais-400k-amostras).
 
 ### 8.4. Dados sintéticos

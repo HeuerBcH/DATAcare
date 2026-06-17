@@ -54,7 +54,10 @@ são públicos, porém pesados — ficam fora do controle de versão). Eles fora
 
 ### 2.1. Baixe os CSVs do Drive
 
-> 📁 **Os CSVs necessários estão no Drive fornecido pela equipe.**
+> 📁 **Os CSVs necessários estão no Drive fornecido pela equipe:**
+> **[Dados DATAcare — Google Drive](https://drive.google.com/drive/folders/1h3oeVmGDSjGjdX6Gzc-0i37rX-Ma6yMI?usp=sharing)**
+> (arquivo `Dados.zip`, ~97,6 MB — descompacte para obter os CSVs).
+>
 > Baixe os **4 arquivos** abaixo (são exatamente os que o pipeline consome):
 
 | Arquivo (nome exato) | Fonte | Tamanho aprox. |

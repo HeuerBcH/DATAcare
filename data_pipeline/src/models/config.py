@@ -53,17 +53,23 @@ def report_path(name: str) -> Path:
 # ---------------------------------------------------------------------------
 # Hiperparâmetros default de cada modelo. A busca (Grid/Random) refina-os.
 
+# class_weight="balanced" reponderar as classes pelo inverso da frequência,
+# atacando a dominância de dengue (73%) / "baixo" (97%) que fazia o modelo
+# ignorar as classes raras (chikungunya, zika, "medio", "alto"). Combina com a
+# remoção do vazamento geográfico para que a predição responda aos sintomas.
 RANDOM_FOREST_PARAMS: dict = {
     "n_estimators": 250,
     "max_depth": None,
     "min_samples_leaf": 1,
     "n_jobs": -1,
+    "class_weight": "balanced",
     "random_state": 42,
 }
 
 DECISION_TREE_PARAMS: dict = {
     "max_depth": 30,
     "min_samples_leaf": 2,
+    "class_weight": "balanced",
     "random_state": 42,
 }
 
@@ -97,11 +103,14 @@ PARAM_DIST: dict = {
         # "sqrt"/"log2" mantêm o RF rápido; max_features=None (todas) é lento
         # e desnecessário (não melhora a acurácia neste problema).
         "clf__max_features": ["sqrt", "log2"],
+        # reponderação de classes — combate o desbalanceamento extremo.
+        "clf__class_weight": ["balanced", "balanced_subsample", None],
     },
     "decision_tree": {
         "clf__max_depth": randint(10, 45),
         "clf__min_samples_leaf": randint(1, 10),
         "clf__criterion": ["gini", "entropy"],
+        "clf__class_weight": ["balanced", None],
     },
 }
 
@@ -110,10 +119,12 @@ PARAM_GRID: dict = {
         "clf__n_estimators": [200, 300],
         "clf__max_depth": [20, 30],
         "clf__min_samples_leaf": [1, 2],
+        "clf__class_weight": ["balanced", "balanced_subsample"],
     },
     "decision_tree": {
         "clf__max_depth": [20, 30, None],
         "clf__criterion": ["gini", "entropy"],
+        "clf__class_weight": ["balanced", None],
     },
 }
 

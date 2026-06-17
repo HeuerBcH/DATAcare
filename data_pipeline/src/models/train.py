@@ -47,7 +47,7 @@ from .config import (
     model_path, report_path,
 )
 from .evaluate import compute_metrics
-from .pipeline import build_pipeline
+from .pipeline import build_calibrated, build_pipeline
 from .tracking import setup_experiment
 
 logger = logging.getLogger(__name__)
@@ -138,47 +138,6 @@ def _build_search_params(cfg: SearchConfig, best_cv: float | None, n_candidates:
 
 
 # ---------------------------------------------------------------------------
-# Severity resampling
-# ---------------------------------------------------------------------------
-
-def _resample_severity(X, y):
-    """Balance the severity training set via undersampling + SMOTE."""
-    import numpy as np
-    from imblearn.over_sampling import SMOTE
-    from imblearn.under_sampling import RandomUnderSampler
-    from sklearn.impute import SimpleImputer
-
-    y_arr = np.asarray(y)
-    unique, cts = np.unique(y_arr, return_counts=True)
-    counts = dict(zip(unique.tolist(), cts.tolist()))
-    logger.info("Before resampling: %s", counts)
-
-    n_medio = counts.get(1, 0)
-    n_alto = counts.get(2, 0)
-    if n_medio == 0 or n_alto == 0:
-        logger.warning("Skipping resampling — missing minority class")
-        return X, y_arr
-
-    imputer = SimpleImputer(strategy="constant", fill_value=0.0)
-    X = imputer.fit_transform(X)
-
-    # Undersample 'baixo' (0) a 10x 'médio' (máx 300K), limitado ao disponível.
-    n_baixo = counts.get(0, 0)
-    target_baixo = min(n_medio * 10, 300_000, n_baixo)
-    under = RandomUnderSampler(sampling_strategy={0: target_baixo}, random_state=42)
-    X_res, y_res = under.fit_resample(X, y_arr)
-
-    # SMOTE 'alto' (2) até igualar 'médio'.
-    k = min(5, n_alto - 1)
-    smote = SMOTE(sampling_strategy={2: n_medio}, k_neighbors=k, random_state=42)
-    X_res, y_res = smote.fit_resample(X_res, y_res)
-
-    counts_after = {v: int((y_res == v).sum()) for v in (0, 1, 2)}
-    logger.info("After resampling:  %s", counts_after)
-    return X_res, y_res
-
-
-# ---------------------------------------------------------------------------
 # MLflow logging helpers
 # ---------------------------------------------------------------------------
 
@@ -205,6 +164,8 @@ def _log_run(pipeline, params: dict, report: dict, X_example) -> None:
 
     mlflow.log_metric("accuracy", report["accuracy"])
     mlflow.log_metric("macro_f1", report["macro_f1"])
+    if "balanced_accuracy" in report:
+        mlflow.log_metric("balanced_accuracy", report["balanced_accuracy"])
     for cls_label, value in report.get("f1_per_class", {}).items():
         mlflow.log_metric(f"f1_{cls_label}", value)
     if "cv_f1_mean" in report:
@@ -257,7 +218,7 @@ def _maybe_subsample(X, y, max_rows: int):
 
 
 def _train_task(task, label_map, X, y, data_source, search: SearchConfig,
-                resample: bool, max_rows: int):
+                max_rows: int, calibrate: bool = False):
     logger.info("=== Treinando %s (comparando %d modelos) ===",
                 task, len(candidate_estimators()))
 
@@ -267,14 +228,13 @@ def _train_task(task, label_map, X, y, data_source, search: SearchConfig,
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=TEST_SIZE, stratify=y, random_state=RANDOM_STATE
     )
-    if resample:
-        X_train, y_train = _resample_severity(X_train, y_train)
 
     feature_names = list(X.columns)
     cv = StratifiedKFold(n_splits=CV_N_SPLITS, shuffle=True, random_state=RANDOM_STATE)
 
     leaderboard: list[dict] = []
-    best = None  # (cv_f1_mean, model_name, pipeline, report)
+    # (cv_f1_mean, model_name, base_pipeline, report)
+    best = None
 
     for model_name, estimator in candidate_estimators().items():
         with mlflow.start_run(run_name=f"{task}-{model_name}-{search.method}"):
@@ -286,6 +246,10 @@ def _train_task(task, label_map, X, y, data_source, search: SearchConfig,
             if best_params:
                 pipeline.set_params(**best_params)
 
+            # CV HONESTA: medida sobre a distribuição ORIGINAL (sem reamostragem
+            # prévia). O balanceamento agora é feito por class_weight dentro do
+            # estimador, então não há pontos sintéticos vazando entre folds —
+            # cv_f1_mean passa a refletir o teste real (corrige a Causa F).
             cv_f1 = cross_val_score(pipeline, X_train, y_train, cv=cv, scoring="f1_macro")
             pipeline.fit(X_train, y_train)
 
@@ -308,24 +272,24 @@ def _train_task(task, label_map, X, y, data_source, search: SearchConfig,
                 "cv_n_splits": CV_N_SPLITS,
                 "stratified_split": True,
                 "random_state": RANDOM_STATE,
+                "class_balancing": "class_weight",
                 "n_train": int(len(y_train)),
                 "n_test": int(len(X_test)),
                 "n_features": len(feature_names),
                 "n_classes": len(label_map),
             }
-            if resample:
-                params["resampling"] = "RandomUnderSampler + SMOTE"
 
             _log_run(pipeline, params, report, X_test)
 
             logger.info(
-                "[%s] %-14s acc=%.4f | macro-F1=%.4f | CV-F1=%.4f +/- %.4f",
-                task, model_name, report["accuracy"], report["macro_f1"],
-                report["cv_f1_mean"], report["cv_f1_std"],
+                "[%s] %-14s acc=%.4f | bal-acc=%.4f | macro-F1=%.4f | CV-F1=%.4f +/- %.4f",
+                task, model_name, report["accuracy"], report["balanced_accuracy"],
+                report["macro_f1"], report["cv_f1_mean"], report["cv_f1_std"],
             )
             leaderboard.append({
                 "algorithm": model_name,
                 "accuracy": report["accuracy"],
+                "balanced_accuracy": report["balanced_accuracy"],
                 "macro_f1": report["macro_f1"],
                 "cv_f1_mean": report["cv_f1_mean"],
             })
@@ -335,15 +299,39 @@ def _train_task(task, label_map, X, y, data_source, search: SearchConfig,
                 best = (score, model_name, pipeline, report)
 
     # Seleção do melhor modelo (por CV macro-F1) -> serving + relatório canônico.
-    _, best_name, best_pipeline, best_report = best
+    _, best_name, best_pipeline, _ = best
+
+    # Calibra apenas o vencedor (custo controlado) para servir probabilidades
+    # suaves; recalcula o relatório canônico sobre o modelo realmente servido,
+    # mantendo as importâncias do pipeline base (modelos calibrados não as
+    # expõem).
+    if calibrate:
+        logger.info(">>> Calibrando o vencedor (%s) p/ probabilidades suaves...", best_name)
+        serving_model = build_calibrated(best_pipeline)
+        serving_model.fit(X_train, y_train)
+    else:
+        serving_model = best_pipeline
+
+    best_report = compute_metrics(
+        serving_model, X_test, y_test,
+        label_map=label_map, model_name=task, feature_names=feature_names,
+        importance_estimator=best_pipeline,
+    )
+    best_report["algorithm"] = best_name
+    best_report["calibrated"] = bool(calibrate)
+    best_report["cv_f1_mean"] = next(
+        (r["cv_f1_mean"] for r in leaderboard if r["algorithm"] == best_name), None
+    )
+    best_report["cv_f1_std"] = best[3].get("cv_f1_std")
     best_report["leaderboard"] = leaderboard
     best_report["selected_model"] = best_name
     logger.info(
-        ">>> Melhor modelo para %s: %s (CV-F1=%.4f | acc=%.4f | macro-F1=%.4f)",
-        task, best_name, best[0], best_report["accuracy"], best_report["macro_f1"],
+        ">>> Melhor modelo para %s: %s (CV-F1=%.4f | acc=%.4f | bal-acc=%.4f | macro-F1=%.4f)",
+        task, best_name, best[0], best_report["accuracy"],
+        best_report["balanced_accuracy"], best_report["macro_f1"],
     )
     _persist_report(task, best_report)
-    _save_serving_model(best_pipeline, task, X_test)
+    _save_serving_model(serving_model, task, X_test)
     return best_report
 
 
@@ -374,17 +362,17 @@ def _load_severity(synthetic: bool):
 
 
 def train_disease(synthetic: bool = False, search: SearchConfig | None = None,
-                  max_rows: int = DEFAULT_MAX_ROWS) -> None:
+                  max_rows: int = DEFAULT_MAX_ROWS, calibrate: bool = False) -> None:
     X, y, data_source = _load_disease(synthetic)
     _train_task("disease_classifier", DISEASE_LABELS, X, y, data_source,
-                search or SearchConfig(), resample=False, max_rows=max_rows)
+                search or SearchConfig(), max_rows=max_rows, calibrate=calibrate)
 
 
 def train_severity(synthetic: bool = False, search: SearchConfig | None = None,
-                   max_rows: int = DEFAULT_MAX_ROWS) -> None:
+                   max_rows: int = DEFAULT_MAX_ROWS, calibrate: bool = False) -> None:
     X, y, data_source = _load_severity(synthetic)
     _train_task("severity_classifier", SEVERITY_LABELS, X, y, data_source,
-                search or SearchConfig(), resample=True, max_rows=max_rows)
+                search or SearchConfig(), max_rows=max_rows, calibrate=calibrate)
 
 
 # ---------------------------------------------------------------------------
@@ -412,21 +400,30 @@ def main() -> None:
                         help="Subamostra para a busca; 0 = tudo (default: 40000)")
     parser.add_argument("--max-rows", type=int, default=DEFAULT_MAX_ROWS,
                         help=f"Cap de linhas do dataset; 0 = todas (default: {DEFAULT_MAX_ROWS})")
+    parser.add_argument("--calibrate", action="store_true",
+                        help="Calibra o vencedor (isotônica, cv=3). DESLIGADO por "
+                             "padrão: a calibração reajusta as probabilidades às "
+                             "priors originais e ANULA o class_weight (re-introduz "
+                             "o viés de classe majoritária). O Random Forest já "
+                             "produz probabilidades suaves nativamente.")
     args = parser.parse_args()
 
     search = SearchConfig(
         method=args.search, n_iter=args.n_iter,
         cv_folds=args.search_cv, sample_size=args.search_sample,
     )
-    logger.info("Search config: %s | max_rows=%s", search, args.max_rows)
+    logger.info("Search config: %s | max_rows=%s | calibrate=%s",
+                search, args.max_rows, args.calibrate)
 
     if args.model in ("disease", "all"):
-        train_disease(synthetic=args.synthetic, search=search, max_rows=args.max_rows)
+        train_disease(synthetic=args.synthetic, search=search,
+                      max_rows=args.max_rows, calibrate=args.calibrate)
         # Libera as matrizes/modelos do disease antes do severity recarregar os
         # parquets — evita que os picos das duas tarefas se somem (OOM).
         gc.collect()
     if args.model in ("severity", "all"):
-        train_severity(synthetic=args.synthetic, search=search, max_rows=args.max_rows)
+        train_severity(synthetic=args.synthetic, search=search,
+                       max_rows=args.max_rows, calibrate=args.calibrate)
 
     logger.info("Training complete.")
 

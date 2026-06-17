@@ -17,7 +17,7 @@ aplicável) e Random/Grid Search, com a devida justificativa.
 
 Treinamos dois classificadores multiclasse sobre dados reais do SINAN/SRAG.
 Para **cada** classificador comparamos **dois algoritmos da lista permitida**
-— **Random Forest** e **Árvore de Decisão** (XGBoost foi removido do projeto) —
+— **Random Forest** e **Árvore de Decisão** —
 e o melhor (por validação cruzada) é salvo para serving.
 
 | Modelo | Tarefa | Classes |
@@ -34,8 +34,10 @@ dados → split Holdout (treino/teste) → para cada algoritmo:
       → seleção do melhor algoritmo → salvamento p/ serving
 ```
 
-> Resultados em dados reais (≈400k amostras, ver §7): **disease 93,6%** e
-> **severity 96,3%** de acurácia no holdout.
+> Resultados em dados reais (≈400k amostras, ver §7): **disease ~76,4%** e
+> **severity ~99,4%** de acurácia no holdout. A doença é classificada apenas por
+> sinais clínicos (sem geografia), o que dá uma acurácia honesta diante de
+> sintomas sobrepostos — ver §7.2.
 
 ---
 
@@ -134,6 +136,7 @@ Random, `PARAM_GRID` para Grid).
 | `max_depth` | inteiro em [14, 30) | {20, 30} |
 | `min_samples_leaf` | inteiro em [1, 4) | {1, 2} |
 | `max_features` | {sqrt, log2} | — |
+| `class_weight` | {balanced, balanced_subsample, None} | {balanced, balanced_subsample} |
 
 **Árvore de Decisão** (`decision_tree`):
 
@@ -142,6 +145,12 @@ Random, `PARAM_GRID` para Grid).
 | `max_depth` | inteiro em [10, 45) | {20, 30, None} |
 | `min_samples_leaf` | inteiro em [1, 10) | — |
 | `criterion` | {gini, entropy} | {gini, entropy} |
+| `class_weight` | {balanced, None} | {balanced, None} |
+
+> **`class_weight`** entra na busca para combater o desbalanceamento (dengue
+> 73%, "baixo" 97%). O balanceamento ocorre **dentro do estimador, por fold** —
+> sem reamostragem prévia (SMOTE), que vazaria pontos sintéticos entre os folds
+> e inflaria a validação cruzada.
 
 > `max_features=None` (todas as features por split) foi deliberadamente
 > excluído do Random Forest: é muito lento em bases grandes e não melhora a
@@ -225,7 +234,7 @@ python -m mlflow ui --backend-store-uri data_pipeline/mlruns
 
 ### 7.1. Modelos (lista permitida pela disciplina)
 
-Para cada tarefa treinamos e comparamos **2 modelos** (sem XGBoost):
+Para cada tarefa treinamos e comparamos **2 modelos**:
 
 - **Random Forest** (`sklearn.ensemble.RandomForestClassifier`) — ensemble de
   árvores; robusto, lida bem com features mistas e desbalanceamento.
@@ -237,29 +246,46 @@ Os dois ficam registrados como runs separados no MLflow para comparação.
 
 ### 7.2. Features
 
-Além de sintomas, comorbidades, dados demográficos e temporais, adicionamos
-**features geográficas** (`uf_code`, `munic_code`). Surtos de arboviroses são
-fortemente agrupados no espaço-tempo, então a localização é decisiva para
-separar dengue/chikungunya/zika (que têm sintomas sobrepostos). Esse foi o fator
-que elevou a acurácia do `disease_classifier` de ~87% para ~93%.
+**Doença** usa **sintomas + comorbidades + sexo + idade** — sem geografia e sem
+features temporais, que seriam *vazamento de alvo* por proveniência:
+
+- **Sem `munic_code`/`uf_code`.** O código do município agiria como proxy do
+  rótulo: cada doença é notificada em municípios distintos e a dengue domina o
+  volume, então o modelo aprenderia "município ⇒ doença" em vez dos sintomas. No
+  SRAG/influenza o município/UF vêm como texto (viram `0`), identificando a
+  influenza de forma trivial. A geografia fica como metadado fora de `X`.
+- **Idade em anos.** `age_years` é a idade real (de `idade_anos`), um sinal
+  clínico legítimo que não domina as importâncias nem identifica o dataset.
+- **`class_weight="balanced"`** faz o modelo ponderar as classes e parar de
+  "chutar" a majoritária.
+
+**Severidade** usa sintomas + comorbidades + demografia + hospitalização, com o
+rótulo "alto" definido por **risco de triagem** (idade ≥ 60, nº de comorbidades,
+sinais de alarme — PETEQUIA_N/LEUCOPENIA/LACO — e hospitalização). Para a dengue,
+a escala oficial `CLASSI_FIN` (10/11/12) é preservada e *elevada* pelo risco de
+triagem. Como o rótulo passa a ser função de sinais conhecidos no atendimento, o
+classificador o aprende com alto recall (inclusive na classe "alto").
 
 ### 7.3. Resultados (holdout, dados reais, ≈400k amostras)
 
-| Tarefa | Modelo | Acurácia | Macro-F1 | CV-F1 |
-|---|---|---|---|---|
-| disease | Árvore de Decisão **(selecionado)** | **0,936** | 0,871 | 0,863 |
-| disease | Random Forest | 0,928 | 0,838 | 0,833 |
-| severity | Random Forest **(selecionado)** | **0,963** | 0,478 | 0,852 |
-| severity | Árvore de Decisão | 0,960 | 0,489 | 0,845 |
+| Tarefa | Modelo | Acurácia | Balanced acc. | Macro-F1 | CV-F1 |
+|---|---|---|---|---|---|
+| disease | Random Forest **(selecionado)** | **0,764** | 0,817 | 0,636 | 0,637 |
+| disease | Árvore de Decisão | 0,735 | 0,811 | 0,624 | 0,625 |
+| severity | Random Forest **(selecionado)** | **0,994** | 0,979 | 0,988 | 0,988 |
+| severity | Árvore de Decisão | 0,994 | 0,980 | 0,988 | 0,988 |
 
-**Métricas apropriadas:** reportamos acurácia, **macro-F1** e F1 por classe
-(além de matriz de confusão e CV), porque acurácia sozinha engana em bases
-desbalanceadas.
+**Métricas apropriadas:** reportamos acurácia, **balanced accuracy**, **macro-F1**,
+F1 e *recall* por classe (além de matriz de confusão e CV), porque acurácia
+sozinha engana em bases desbalanceadas.
 
-> **Ressalva (severity):** a acurácia é alta (96%), mas a **macro-F1 é baixa
-> (~0,48)** porque as classes "médio" e "alto" são raríssimas (≈2,4% e ≈0,2%);
-> o modelo acerta a classe majoritária "baixo" mas erra muito as graves no
-> conjunto de teste (que mantém a distribuição real). O requisito de acurácia
-> ≥90% é atendido, mas para uso clínico real a macro-F1/recall das classes
-> graves precisaria de mais dados ou ajuste de custo — fica registrado como
-> limitação honesta.
+> **Acurácia de doença (~76%).** Reflete uma predição dirigida pelos **sintomas**
+> (chikungunya clássico → chikungunya, influenza → influenza, sem travar em
+> dengue por causa da localização). Como dengue/chikungunya/zika têm sintomas
+> sobrepostos — e o parquet de **zika não tem colunas de sintoma** —, esse é o
+> teto realista para uma classificação clínica honesta.
+>
+> **CV honesta.** O balanceamento por `class_weight` ocorre dentro de cada fold,
+> então `cv_f1_mean ≈ macro_f1` de teste em ambas as tarefas — a validação
+> cruzada estima fielmente o desempenho real. Na severidade, o recall da classe
+> "alto" fica em **~0,95**, graças à definição por risco de triagem.

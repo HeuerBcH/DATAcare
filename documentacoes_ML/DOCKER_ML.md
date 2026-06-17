@@ -209,7 +209,8 @@ Abra http://localhost:5000 e compare os runs nos experimentos
 ## Dados
 
 - Com os **parquets reais** em `data_pipeline/data/interim/` (gerados pelo ETL),
-  o treino usa dados reais e atinge **disease ≈ 93,6%** e **severity ≈ 96,3%**.
+  o treino usa dados reais e atinge **disease ≈ 76,4%** (predição dirigida por
+  sintomas) e **severity ≈ 99,4%**.
 - Sem os parquets, o treino cai automaticamente para **dados sintéticos**
   (útil para reproduzir em qualquer máquina / CI).
 
