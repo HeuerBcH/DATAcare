@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { Search, Filter, AlertTriangle } from 'lucide-react'
 import clsx from 'clsx'
 import api from '../api/client'
+import { mockRecentPatients } from '../api/mock'
+
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
 
 interface Visit {
   id: number
@@ -36,6 +39,30 @@ export default function Patients() {
   const [diseaseFilter, setDiseaseFilter] = useState('todos')
 
   useEffect(() => {
+    if (USE_MOCK) {
+      const diseaseDisplay: Record<string, string> = {
+        dengue: 'Dengue', chikungunya: 'Chikungunya', zika: 'Zika', influenza: 'Influenza',
+      }
+      const severityDisplay: Record<string, string> = {
+        alto: 'Alto Risco', medio: 'Médio Risco', baixo: 'Baixo Risco',
+      }
+      setVisits(mockRecentPatients.map(p => ({
+        id: p.id,
+        patient_name: p.name,
+        patient_age: p.age,
+        patient_sex: 'F',
+        bairro: p.bairro,
+        predicted_disease: p.disease,
+        predicted_disease_display: diseaseDisplay[p.disease] ?? p.disease,
+        predicted_severity: p.risk,
+        predicted_severity_display: severityDisplay[p.risk] ?? p.risk,
+        model_available: true,
+        acs_name: p.acs,
+        created_at: new Date().toISOString(),
+      })))
+      setLoading(false)
+      return
+    }
     api.get<Visit[]>('/api/v1/visits/')
       .then(res => setVisits(Array.isArray(res.data) ? res.data : (res.data as any).results ?? []))
       .catch(() => setError('Não foi possível carregar as visitas. Verifique se o backend está rodando.'))

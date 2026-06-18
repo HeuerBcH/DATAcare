@@ -16,7 +16,7 @@ unificado, construído com `target: ml`) — mudando apenas o comando:
 
 | Serviço | Papel | Porta |
 |---|---|---|
-| `mlflow` | Servidor de tracking + **UI** | http://localhost:5000 |
+| `mlflow` | Servidor de tracking + **UI** | http://localhost:5001 |
 | `ml-trainer` | Treina/compara os modelos e registra no MLflow | — (one-shot no `up`) |
 | `dashboard` | Streamlit (ETL & ML) — a imagem já traz streamlit/plotly | http://localhost:8501 |
 
@@ -144,7 +144,7 @@ volume montado. Sem eles, o treino usa **dados sintéticos**.
 ```bash
 docker compose up -d
 # Ordem: mlflow (healthy) + ml-trainer (treina) -> backend -> frontend
-# UI MLflow: http://localhost:5000
+# UI MLflow: http://localhost:5001
 # Dashboard ML/ETL (Streamlit): http://localhost:8501
 ```
 
@@ -177,7 +177,7 @@ na subida seguinte (a menos que `FORCE_ML_TRAIN=true`).
 
 ```bash
 docker compose up -d mlflow
-# UI em http://localhost:5000
+# UI em http://localhost:5001
 ```
 
 ### 3. Rodar só o ETL (fora do Docker)
@@ -202,7 +202,7 @@ docker compose run --rm ml-trainer python -m src.models.train --model disease --
 
 ### 5. Ver os resultados
 
-Abra http://localhost:5000 e compare os runs nos experimentos
+Abra http://localhost:5001 e compare os runs nos experimentos
 `datacare-disease-classification` e `datacare-severity-classification`
 (parâmetros, métricas e modelos de cada algoritmo).
 

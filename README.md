@@ -3,146 +3,132 @@
 **DATAcare** (CESAR School — Projeto 6, Grupo 13): sistema de inteligência em saúde para UBS em Recife, PE.
 Triagem comunitária com ML, dashboard epidemiológico e API REST.
 
-## Estado do repositório
+## Stack
 
-| Área | Branch | Status |
-|------|--------|--------|
-| Frontend (React + Vite + Tailwind) | `feature/hu09-dashboard` | Dashboard completo |
-| Backend Django + JWT/RBAC | `feature/hu03-hu04` | Auth + API REST |
-| ETL (limpeza + split) | `feature/data-etl` | Produção |
-| EDA (análise exploratória) | `feature/hu04-eda` | Completo |
-| ML (2 modelos XGBoost) | `feature/hu05-hu06-ml` | Completo |
-| Docker | `main` | Pendente (HU-11) |
+| Camada | Tecnologia |
+|--------|-----------|
+| Frontend | React + Vite + Tailwind CSS |
+| Backend | Django 4.2 + DRF + JWT |
+| ML Pipeline | scikit-learn (Random Forest — padrão; Árvore de Decisão como comparação) |
+| Tracking | MLflow 2.10 |
+| Dashboard ML | Streamlit |
+| Banco de dados | PostgreSQL 15 |
+| Infraestrutura | Docker Compose |
 
-## Pré-requisitos
-
-| Ferramenta | Versão |
-|------------|--------|
-| Node.js | ≥ 18 |
-| npm | ≥ 9 |
-| Python | 3.10+ |
-| PostgreSQL | 15+ (backend) |
-
-## Setup rápido
+## Subir tudo com Docker (recomendado)
 
 ```bash
-# Variáveis de ambiente (na raiz, compartilhadas por frontend e backend)
-cp .env.example .env
+cp .env.example .env   # ajuste as variáveis se necessário
+docker compose up -d
+```
 
-# Frontend
-cd frontend
-npm install
-npm run dev          # http://localhost:3000
-cd ..
+O compose sobe, em ordem, mlflow → ml-trainer → backend → frontend + dashboard.
+Ao final, os usuários de demonstração e as triagens de teste já estão criados automaticamente.
 
+| Serviço | URL |
+|---------|-----|
+| Frontend (React) | http://localhost:3000 |
+| Backend (API Django) | http://localhost:8000 |
+| Dashboard ML (Streamlit) | http://localhost:8501 |
+| MLflow UI | http://localhost:5001 |
+
+### Logins de demonstração
+
+Senha para todos: **`datacare123`**
+
+| Usuário | Papel |
+|---------|-------|
+| `gestor` | Gestor de UBS |
+| `acs1` | Agente Comunitário |
+| `acs2` | Agente Comunitário |
+| `medico` | Profissional de Saúde |
+| `admin` | Administrador |
+
+## Rodar localmente (sem Docker)
+
+Consulte [`documentacoes/RODAR_LOCAL.md`](documentacoes/RODAR_LOCAL.md) para o passo a passo completo.
+
+```bash
 # Backend
 cd backend
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+python -m venv .venv && source .venv/bin/activate
 pip install -r ../requirements.txt
 python manage.py migrate
+python manage.py seed_demo        # cria usuários e triagens de demo
 python manage.py runserver
-```
 
-## Rodar o dashboard
-
-**Modo demo (sem backend)** — dados mock realistas, sem precisar do Django:
-
-```bash
-# Adicione ao .env (na raiz):
-VITE_USE_MOCK=true
-
+# Frontend (outro terminal)
 cd frontend
-npm run dev
-# Abra http://localhost:3000
-# Login automático como Gestor
+npm install
+npm run dev    # http://localhost:3000
 ```
 
-**Modo real (com backend):**
+> **Modo demo (sem backend):** defina `VITE_USE_MOCK=true` no `.env` para o frontend
+> usar dados mock realistas (Dashboard e Pacientes), dispensando o Django.
+
+## Pipeline de ML
+
+Consulte [`documentacoes_ML/EXECUCAO.md`](documentacoes_ML/EXECUCAO.md) para o guia completo de ETL + treino.
 
 ```bash
-# .env (na raiz) sem VITE_USE_MOCK (ou =false)
-cd frontend
-npm run dev
-# Login com usuário criado via: python manage.py createsuperuser
+# Treinar localmente (após rodar o ETL)
+export PYTHONPATH=data_pipeline
+python -m src.models.train --model all
+
+# Testes do pipeline (dados sintéticos, sem precisar dos CSVs)
+python -m pytest data_pipeline/tests -v
 ```
 
-## Rodar os modelos ML
-
-```bash
-# Ative o virtualenv com as dependências
-pip install -r requirements.txt   # ou requirements-ml.txt
-
-# Treinar com dados sintéticos (sem arquivos reais)
-PYTHONPATH=data_pipeline python -m src.models.train --model all --synthetic
-
-# Treinar com dados reais (parquets em data_pipeline/data/interim/)
-PYTHONPATH=data_pipeline python -m src.models.train --model all
-
-# Rodar testes unitários (usa dados sintéticos, sem parquets)
-PYTHONPATH=data_pipeline pytest data_pipeline/tests/ml/ -v
-```
-
-### Modelos disponíveis
+### Modelos
 
 | Modelo | Classes | Algoritmo |
 |--------|---------|-----------|
-| `disease_classifier` | dengue / chikungunya / zika / influenza | XGBoost |
-| `severity_classifier` | baixo / médio / alto | XGBoost |
-
-## Variáveis de ambiente
-
-```env
-# Frontend (Vite)
-VITE_API_URL=http://localhost:8000
-VITE_USE_MOCK=false          # true para modo demo sem backend
-
-# Backend (Django)
-SECRET_KEY=sua-chave-secreta
-DEBUG=True
-DB_NAME=datacare_db
-DB_USER=datacare_user
-DB_PASSWORD=datacare_password
-DB_HOST=localhost
-DB_PORT=5432
-```
+| `disease_classifier` | dengue / chikungunya / zika / influenza | Random Forest |
+| `severity_classifier` | baixo / médio / alto | Random Forest |
 
 ## Estrutura
 
 ```
 DATAcare/
-├── src/                        # Frontend React
-│   ├── pages/                  # Login, Dashboard, Triagem, Predições
-│   ├── components/             # KPICard, DiseaseChart, AlertPanel, ...
-│   ├── context/AuthContext.tsx
-│   └── api/client.ts           # Axios + JWT interceptor
+├── frontend/                   # React + Vite
+│   └── src/
+│       ├── pages/              # Login, Dashboard, TriageForm, Visits
+│       ├── components/         # KPICard, DiseaseChart, AlertPanel, ...
+│       ├── context/            # AuthContext (JWT)
+│       └── api/                # client.ts (Axios), mock.ts
 ├── backend/                    # Django + DRF
-│   ├── apps/users/             # Auth JWT + RBAC
-│   ├── apps/patients/
-│   ├── apps/predictions/
-│   └── config/settings.py
-├── data_pipeline/              # PYTHONPATH=data_pipeline (imports: src.*)
+│   └── apps/
+│       ├── users/              # Auth JWT + RBAC + seed_demo
+│       ├── patients/           # Visit (triagem) + Patient
+│       └── api/                # Endpoints ML, dashboard, predict
+├── data_pipeline/              # Pipeline de ML (PYTHONPATH=data_pipeline)
 │   ├── src/
-│   │   ├── etl/                # Limpeza e split (HU-07)
-│   │   ├── features/           # Feature engineering (HU-05)
-│   │   ├── models/             # Treinamento e inferência (HU-06)
-│   │   └── utils/              # Logging compartilhado
-│   ├── models/                 # Artefatos .joblib treinados
-│   ├── notebooks/              # EDA pós-split (HU-04)
+│   │   ├── etl/                # Limpeza e split dos CSVs SINAN
+│   │   ├── features/           # Feature engineering
+│   │   ├── models/             # Treino, avaliação e inferência
+│   │   └── utils/
+│   ├── dashboard/              # Streamlit (ETL + métricas ML)
+│   ├── models/                 # Artefatos treinados (MLflow)
 │   ├── data/                   # interim/ · processed/ · reports/
 │   └── tests/                  # tests/etl · tests/ml
-├── documentacoes/
-├── requirements.txt
-└── requirements-ml.txt
+├── documentacoes/              # Setup, rodar local, implementações
+├── documentacoes_ML/           # ETL, treino, validação, Docker ML
+├── docker-compose.yaml
+├── Dockerfile                  # multi-stage: backend (Python 3.12) + ml (Python 3.11)
+├── Dockerfile.frontend
+└── requirements.txt
 ```
 
 ## Scripts úteis
 
 ```bash
-npm run dev          # Servidor de desenvolvimento frontend
-npm run build        # Build de produção
-npm run type-check   # Verificar TypeScript sem erros
-npm run lint         # ESLint
+# Recriar dados de demonstração
+docker exec datacare-backend python manage.py seed_demo --reset
 
-python manage.py migrate           # Aplicar migrations
-python manage.py createsuperuser   # Criar admin
+# Ver logs do treino ML
+docker logs datacare-mlflow
+
+# Rodar testes do pipeline
+export PYTHONPATH=data_pipeline
+python -m pytest data_pipeline/tests -v
 ```

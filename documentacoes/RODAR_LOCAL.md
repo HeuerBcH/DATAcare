@@ -36,8 +36,8 @@ python manage.py seed_demo --patients 180 --reset
 cd ..
 ```
 
-O `seed_demo` cria os usuários, os catálogos de sintomas/comorbidades e ~180 pacientes
-com visitas e alertas — rodando a predição de risco em cada triagem.
+O `seed_demo` cria os usuários de demonstração e ~180 triagens com sintomas,
+predições de doença e severidade gerados automaticamente.
 
 ### 1.3 Subir a API
 

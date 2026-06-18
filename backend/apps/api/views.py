@@ -224,18 +224,35 @@ class PredictionViewSet(viewsets.ViewSet):
         latest_vitals = patient.vitals.first()
         if not latest_vitals:
             return Response({'detail': 'Nenhum sinal vital registrado'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # TODO: Call actual ML model for prediction
-        risk_score = 50  # Placeholder
-        
+
+        features = {
+            'age_years': float(patient.age),
+            'sex_M': 1.0 if patient.gender == 'M' else 0.0,
+            'FEBRE': 1.0 if latest_vitals.temperature > 37.5 else 0.0,
+        }
+        result = predict_full(features)
+        if result is None:
+            return Response(
+                {'detail': 'Modelos ML não disponíveis. Execute o pipeline de treinamento.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        severity = result['severity']['predicted_class']
+        severity_to_risk = {'baixo': 'low', 'medio': 'medium', 'alto': 'high'}
+        risk_level = severity_to_risk.get(severity, 'medium')
+        risk_score = round(max(result['severity']['probabilities'].values()) * 100, 1)
+
         prediction = Prediction.objects.create(
             patient=patient,
             model=model,
-            risk_level=get_risk_level_from_score(risk_score),
+            risk_level=risk_level,
             probability=risk_score,
             prediction_data={
                 'blood_pressure': f"{latest_vitals.blood_pressure_systolic}/{latest_vitals.blood_pressure_diastolic}",
                 'heart_rate': latest_vitals.heart_rate,
+                'predicted_disease': result['disease']['predicted_class'],
+                'disease_probabilities': result['disease']['probabilities'],
+                'severity_probabilities': result['severity']['probabilities'],
             }
         )
         

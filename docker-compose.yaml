@@ -29,7 +29,7 @@ services:
     command: >
       sh -c "cd backend &&
              python manage.py migrate &&
-             python manage.py createsuperuser --noinput --username admin --email admin@datacare.local || true &&
+             python manage.py seed_demo || true &&
              gunicorn --bind 0.0.0.0:8000 --workers 4 --timeout 120 config.wsgi:application"
     environment:
       DEBUG: ${DEBUG:-False}
@@ -112,15 +112,15 @@ services:
       mlflow server
         --backend-store-uri file:///mlflow/mlruns
         --artifacts-destination file:///mlflow/mlruns
-        --host 0.0.0.0 --port 5000
+        --host 0.0.0.0 --port 5001
     volumes:
       - mlflow_data:/mlflow
     ports:
-      - "5000:5000"
+      - "5001:5001"
     networks:
       - datacare-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -210,7 +210,7 @@ services:
         echo "   Backend   (API Django)    ->  http://localhost:8000"
         echo "   Frontend  (React/Vite)    ->  http://localhost:3000"
         echo "   Dashboard (Streamlit)     ->  http://localhost:8501"
-        echo "   MLflow UI (experimentos)  ->  http://localhost:5000"
+        echo "   MLflow UI (experimentos)  ->  http://localhost:5001"
         echo "   PostgreSQL                ->  localhost:5432"
         echo "   Redis                     ->  localhost:6379"
         echo "=================================================================="
