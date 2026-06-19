@@ -281,7 +281,7 @@ URLs depois que tudo sobe:
 | Backend (API Django) | http://localhost:8000 |
 | Frontend (React/Vite) | http://localhost:3000 |
 | Dashboard ETL/ML (Streamlit) | http://localhost:8501 |
-| MLflow UI (experimentos) | http://localhost:5000 |
+| MLflow UI (experimentos) | http://localhost:5001 |
 
 > O `ml-trainer` lê os parquets de `data_pipeline/data/interim/` pelo volume
 > montado. **Sem os parquets, ele treina com dados sintéticos** (a stack sobe
@@ -299,7 +299,7 @@ Controle do treino pelo `.env` (na raiz `DATAcare/`):
 Subir apenas serviços específicos:
 
 ```bash
-docker compose up -d mlflow        # só a UI do MLflow (porta 5000)
+docker compose up -d mlflow        # só a UI do MLflow (porta 5001)
 docker compose up -d dashboard     # só o dashboard (porta 8501)
 docker compose run --rm ml-trainer # treinar manualmente, uma vez
 ```
@@ -310,7 +310,7 @@ Detalhes completos da conteinerização em [`DOCKER_ML.md`](./DOCKER_ML.md).
 
 ## 7. Conferir os resultados
 
-1. **MLflow UI** — http://localhost:5000 : compare os runs dos experimentos
+1. **MLflow UI** — http://localhost:5001 : compare os runs dos experimentos
    `datacare-disease-classification` e `datacare-severity-classification`
    (parâmetros, métricas, modelos de cada algoritmo).
 2. **Dashboard Streamlit** — http://localhost:8501 : visão de ETL (linhas,
@@ -352,7 +352,7 @@ python -m src.etl.run_pipeline                 # processa tudo
 # 3. Stack completa (treina + MLflow + dashboard + backend + frontend)
 docker compose up -d
 
-# 4. Resultados: http://localhost:5000 (MLflow) e http://localhost:8501 (dashboard)
+# 4. Resultados: http://localhost:5001 (MLflow) e http://localhost:8501 (dashboard)
 ```
 
 ---

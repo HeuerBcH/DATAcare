@@ -46,7 +46,7 @@ export default function Predictions() {
       setLoading(false)
       return
     }
-    api.get('/api/v1/models/')
+    api.get('/api/v1/prediction-models/')
       .then(res => setModels(res.data.results ?? res.data))
       .catch(() => setModels(mockModels))
       .finally(() => setLoading(false))

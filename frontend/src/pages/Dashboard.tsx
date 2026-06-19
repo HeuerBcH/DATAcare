@@ -1,19 +1,21 @@
 import { useEffect, useState } from 'react'
-import { Users, AlertTriangle, Activity, TrendingUp, Database } from 'lucide-react'
+import { Users, AlertTriangle, Activity, TrendingUp } from 'lucide-react'
 import KPICard from '../components/KPICard'
 import DiseaseChart from '../components/DiseaseChart'
 import TrendChart from '../components/TrendChart'
 import AlertPanel from '../components/AlertPanel'
 import PatientTable from '../components/PatientTable'
 import api from '../api/client'
+import { mockDashboardStats, mockTrendData, mockAlerts, mockRecentPatients } from '../api/mock'
+
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
 
 interface DashboardStats {
   total_visits_week: number
-  total_cases: number
+  total_visits: number
   high_risk_count: number
   active_alerts: number
   disease_distribution: Record<string, number>
-  data_source: 'sinan_parquets' | 'db_visits' | 'no_data'
 }
 
 interface Alert {
@@ -55,12 +57,6 @@ function mapVisitToTableRow(v: Visit) {
   }
 }
 
-const SOURCE_LABEL: Record<string, string> = {
-  sinan_parquets: 'Fonte: SINAN/DataSUS (dados epidemiológicos reais)',
-  db_visits:      'Fonte: registros de visitas ACS',
-  no_data:        'Sem dados — execute o pipeline ETL ou registre visitas',
-}
-
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [alerts, setAlerts] = useState<Alert[]>([])
@@ -70,6 +66,34 @@ export default function Dashboard() {
   const [error, setError] = useState('')
 
   useEffect(() => {
+    if (USE_MOCK) {
+      const dist = mockDashboardStats.disease_distribution
+      setStats({
+        ...mockDashboardStats,
+        total_visits: Object.values(dist).reduce((a, b) => a + b, 0),
+      })
+      setAlerts(mockAlerts.map(a => ({
+        id: a.id,
+        patient_name: a.patient_name,
+        predicted_severity: a.risk_level,
+        predicted_disease: a.disease,
+        bairro: a.bairro,
+        created_at: a.created_at,
+      })))
+      setTrend(mockTrendData)
+      setVisits(mockRecentPatients.map(p => ({
+        id: p.id,
+        patient_name: p.name,
+        patient_age: p.age,
+        predicted_disease: p.disease,
+        predicted_severity: p.risk,
+        bairro: p.bairro,
+        acs_name: p.acs,
+      })))
+      setLoading(false)
+      return
+    }
+
     Promise.all([
       api.get<DashboardStats>('/api/v1/dashboard/stats/'),
       api.get<Alert[]>('/api/v1/dashboard/alerts/'),
@@ -108,7 +132,6 @@ export default function Dashboard() {
   }
 
   const dist = stats?.disease_distribution ?? {}
-  const totalCases = stats?.total_cases ?? Object.values(dist).reduce((a, b) => a + b, 0)
 
   return (
     <div className="space-y-6">
@@ -118,12 +141,6 @@ export default function Dashboard() {
           <h1 className="text-xl font-bold text-slate-800">Dashboard Epidemiológico</h1>
           <p className="mt-0.5 text-sm text-slate-500">Recife, PE — dados em tempo real</p>
         </div>
-        {stats?.data_source && (
-          <div className="flex items-center gap-1.5 rounded-lg bg-teal-50 px-3 py-1.5 text-xs text-teal-700">
-            <Database size={12} />
-            {SOURCE_LABEL[stats.data_source]}
-          </div>
-        )}
       </div>
 
       {/* KPI Cards */}
@@ -135,9 +152,9 @@ export default function Dashboard() {
           icon={<Users size={20} />}
         />
         <KPICard
-          title="Total de Casos"
-          value={totalCases.toLocaleString('pt-BR')}
-          subtitle="Notificações SINAN"
+          title="Total de Triagens"
+          value={(stats?.total_visits ?? 0).toLocaleString('pt-BR')}
+          subtitle="Registros no sistema"
           icon={<Activity size={20} />}
         />
         <KPICard
@@ -162,16 +179,7 @@ export default function Dashboard() {
           {Object.keys(dist).length > 0 && <DiseaseChart data={dist} />}
           {trend.length > 0 && <TrendChart data={trend} />}
         </div>
-      ) : (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
-          <p className="text-sm text-slate-400">
-            Sem dados epidemiológicos — execute o pipeline ETL para gerar os parquets SINAN.
-          </p>
-          <code className="mt-2 block text-xs text-slate-500">
-            PYTHONPATH=data_pipeline python -m src.etl.run_pipeline
-          </code>
-        </div>
-      )}
+      ) : null}
 
       {/* Alerts + Visits */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

@@ -134,7 +134,7 @@ def api_me(request):
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 def api_profile_update(request):
-    """PATCH /api/v1/auth/me/ — atualiza perfil do usuário autenticado."""
+    """PATCH /api/v1/auth/me/update/ — atualiza perfil do usuário autenticado."""
     serializer = UserSerializer(request.user, data=request.data, partial=True)
     serializer.is_valid(raise_exception=True)
     serializer.save()
